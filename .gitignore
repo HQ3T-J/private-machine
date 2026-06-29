@@ -1,0 +1,26 @@
+# Build output
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+
+# PyInstaller
+*.manifest
+
+# Virtualenv
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev artifacts
+_test_verify.py
