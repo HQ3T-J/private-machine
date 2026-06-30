@@ -417,14 +417,55 @@ public class AIService {
     }
 
     private Map<String, String> parseWithLLM(String text, com.standupsync.config.AIServerConfig aiConfig) throws IOException {
-        String prompt = """
-            你是站会秘书。从发言中提取"昨天完成了什么"、"今天计划做什么"、"有什么阻碍"。
-            返回纯JSON格式，不要markdown代码块:
-            {"yesterday": "...", "today": "...", "blockers": "..."}
-            如果某部分未提及，对应字段留空字符串。
+        String systemPrompt = """
+            你是一个专业的敏捷开发站会秘书。你的任务是将团队成员的发言精确地拆分为三个结构化字段。
 
-            发言内容:
-            """ + text;
+            ## 分类规则
+
+            **yesterday (昨天完成了什么)**
+            - 已完成的任务、已修复的bug、已上线的功能
+            - 已完成的代码审查、已通过的测试
+            - 已交付的文档、已完成的会议
+            - 提示词: 昨天、完成了、已经、修复了、上线了、交付了、做完了
+
+            **today (今天计划做什么)**
+            - 计划开始的任务、正在进行的工作
+            - 准备编写的代码、即将开始的开发
+            - 安排好的会议、计划中的测试
+            - 提示词: 今天、准备、计划、开始、进行、继续、接下来
+
+            **blockers (阻碍/风险)**
+            - 阻塞当前工作的外部依赖
+            - 等待他人响应、需要他人协助
+            - 技术难题、环境问题、资源不足
+            - 需求不明确、方案待确认
+            - 提示词: 阻碍、卡住了、等待、需要...帮助、依赖、blocked by
+
+            ## 输出要求
+            1. 每个字段提取核心内容，去除冗余的语气词和连接词
+            2. 保留关键技术细节（模块名、功能名、bug编号等）
+            3. 如果某类信息在发言中完全没有提及，该字段留空字符串 ""
+            4. 不要添加原文没有的信息
+            5. 使用简洁专业的语言，每条控制在80字以内
+            6. 多条内容用分号分隔
+
+            ## 示例
+
+            输入: "昨天把登录模块重构完了，修了3个样式bug；今天开始做权限管理，下午有个技术评审；目前卡在接口文档还没对齐"
+            输出: {"yesterday": "完成登录模块重构；修复3个样式bug", "today": "开始权限管理开发；参加技术评审", "blockers": "接口文档未对齐"}
+
+            输入: "continuing work on the dashboard API, should finish by EOD. blocked by the design team not providing final mockups yet"
+            输出: {"yesterday": "", "today": "继续Dashboard API开发，预计今日完成", "blockers": "设计团队未提供最终mockup"}
+
+            输入: "今天主要排查线上内存泄漏问题，已经定位到是缓存模块"
+            输出: {"yesterday": "", "today": "排查并定位缓存模块内存泄漏问题", "blockers": ""}
+
+            输入: "nothing to report"
+            输出: {"yesterday": "", "today": "", "blockers": ""}
+
+            返回纯JSON，不要markdown代码块，不要任何其他文字。""";
+
+        String userPrompt = "请分析以下站会发言:\n\n" + text;
 
         User.AIConfig cfg = new User.AIConfig();
         cfg.setProvider(aiConfig.getProvider());
@@ -435,8 +476,7 @@ public class AIService {
         cfg.setTemperature(aiConfig.getTemperature());
         cfg.setMaxTokens(aiConfig.getMaxTokens());
 
-        String response = callLLM(cfg,
-            "你是一个站会秘书助手，只返回JSON，不要任何额外文字。", prompt);
+        String response = callLLM(cfg, systemPrompt, userPrompt);
         String json = extractJson(response);
         return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
     }
