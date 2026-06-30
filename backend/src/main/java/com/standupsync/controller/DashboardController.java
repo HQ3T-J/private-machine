@@ -16,6 +16,21 @@ public class DashboardController {
         this.service = service;
     }
 
+    @GetMapping("/kpi")
+    public ApiResponse<Map<String, Object>> kpi(
+            @RequestParam Long teamId,
+            @RequestParam(required = false) String sprintNo) {
+        return ApiResponse.ok(service.computeSummary(teamId, sprintNo));
+    }
+
+    @GetMapping("/trends")
+    public ApiResponse<Map<String, Object>> trends(@RequestParam Long teamId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("attendance", service.computeAttendanceTrend(teamId, 10));
+        result.put("completion", service.computeCompletionTrend(teamId, 10));
+        return ApiResponse.ok(result);
+    }
+
     @GetMapping("/summary")
     public ApiResponse<Map<String, Object>> summary(
             @RequestParam Long teamId,

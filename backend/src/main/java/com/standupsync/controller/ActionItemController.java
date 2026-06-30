@@ -44,6 +44,16 @@ public class ActionItemController {
         return ApiResponse.ok(items);
     }
 
+    @GetMapping("/todos/unfinished")
+    public ApiResponse<List<ActionItem>> unfinished(@RequestAttribute("userId") String userId) {
+        List<ActionItem> items = repo.findByAssigneeId(userId);
+        items = items.stream()
+                .filter(i -> !"DONE".equalsIgnoreCase(i.getStatus().name())
+                          && !"completed".equalsIgnoreCase(i.getStatus().name()))
+                .toList();
+        return ApiResponse.ok(items);
+    }
+
     @PostMapping("/action-items")
     public ApiResponse<ActionItem> create(@RequestAttribute("userId") String userId,
                                            @RequestBody Map<String, Object> body) {
