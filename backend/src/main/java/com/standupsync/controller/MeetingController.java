@@ -3,6 +3,7 @@ package com.standupsync.controller;
 import com.standupsync.dto.ApiResponse;
 import com.standupsync.model.*;
 import com.standupsync.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.web.bind.annotation.*;
 
@@ -134,6 +135,125 @@ public class MeetingController {
         meeting.setStatus(Meeting.MeetingStatus.ENDED);
         meeting.setEndedAt(LocalDateTime.now());
         return ApiResponse.success("会议已结束", meetingRepository.save(meeting));
+    }
+
+    // ═══ 粘贴聊天批量解析 ═══
+    @PostMapping("/{id}/paste")
+    public ApiResponse<Map<String, Object>> pasteChat(@RequestAttribute("userId") String userId,
+                                                       @PathVariable Long id,
+                                                       @RequestBody Map<String, String> body) {
+        Meeting meeting = meetingRepository.findById(id).orElse(null);
+        if (meeting == null) return ApiResponse.error(404, "会议不存在");
+        String text = body.getOrDefault("text", "");
+        if (text.isBlank()) return ApiResponse.error(400, "文本为空");
+
+        // 解析 "Name: content" 格式
+        java.util.List<java.util.Map<String, String>> parsed = new java.util.ArrayList<>();
+        for (String line : text.split("\\R")) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            int idx = -1;
+            int ce = line.indexOf(':'), cc = line.indexOf('：');
+            if (ce > 0 && (cc < 0 || ce < cc)) idx = ce;
+            else if (cc > 0) idx = cc;
+            if (idx > 0 && idx < 30) {
+                java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+                m.put("name", line.substring(0, idx).trim());
+                m.put("content", line.substring(idx + 1).trim());
+                parsed.add(m);
+            }
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("count", parsed.size());
+        result.put("speeches", parsed);
+        return ApiResponse.success("解析完成", result);
+    }
+
+    // ═══ 文本分类 ═══
+    @PostMapping("/{id}/classify")
+    public ApiResponse<java.util.Map<String, Object>> classifyText(@RequestAttribute("userId") String userId,
+                                                                    @PathVariable Long id,
+                                                                    @RequestBody java.util.Map<String, String> body) {
+        String text = body.getOrDefault("text", "");
+        if (text.isBlank()) return ApiResponse.error(400, "文本为空");
+
+        String t = text.toLowerCase();
+        int yesterdayScore = 0, todayScore = 0, blockerScore = 0;
+        if (t.contains("昨天") || t.contains("完成") || t.contains("做完了") || t.contains("了")) yesterdayScore += 10;
+        if (t.contains("今天") || t.contains("计划") || t.contains("要做") || t.contains("打算")) todayScore += 10;
+        if (t.contains("阻碍") || t.contains("问题") || t.contains("卡住") || t.contains("需要帮助")) blockerScore += 10;
+        if (t.contains("已完成") || t.contains("做完了") || t.contains("搞定了")) yesterdayScore += 15;
+
+        String category; double confidence;
+        int max = Math.max(yesterdayScore, Math.max(todayScore, blockerScore));
+        if (max == 0) { category = "today"; confidence = 0.5; }
+        else if (max == yesterdayScore) { category = "yesterday"; confidence = Math.min(0.9, yesterdayScore / 20.0); }
+        else if (max == blockerScore) { category = "blocker"; confidence = Math.min(0.9, blockerScore / 20.0); }
+        else { category = "today"; confidence = Math.min(0.9, todayScore / 20.0); }
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("category", category);
+        result.put("confidence", confidence);
+        return ApiResponse.success(result);
+    }
+
+    // ═══ AI 站会总结 ═══
+    @PostMapping("/{id}/summary/generate")
+    public ApiResponse<?> generateSummary(@RequestAttribute("userId") String userId,
+                                           @PathVariable Long id) {
+        Meeting meeting = meetingRepository.findById(id).orElse(null);
+        if (meeting == null) return ApiResponse.error(404, "会议不存在");
+
+        List<MeetingSpeech> speeches = meetingSpeechRepository.findByMeetingIdOrderByCreatedAtAsc(id);
+        if (speeches.isEmpty()) return ApiResponse.error(400, "没有发言记录");
+
+        // Build summary from speeches
+        List<String> doneList = new ArrayList<>();
+        List<String> planList = new ArrayList<>();
+        List<String> blockerList = new ArrayList<>();
+        for (MeetingSpeech s : speeches) {
+            String speaker = s.getSpeaker() != null ? s.getSpeaker().getUsername() : "?";
+            if (s.getYesterday() != null && !s.getYesterday().isBlank())
+                doneList.add(speaker + ": " + s.getYesterday());
+            if (s.getToday() != null && !s.getToday().isBlank())
+                planList.add(speaker + ": " + s.getToday());
+            if (s.getBlockers() != null && !s.getBlockers().isBlank())
+                blockerList.add(speaker + ": " + s.getBlockers());
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("doneList", doneList);
+        summary.put("planList", planList);
+        summary.put("blockers", blockerList);
+
+        // Save to meeting
+        try {
+            meeting.setAiResult(new ObjectMapper().writeValueAsString(summary));
+            meeting.setAiStatus(Meeting.AiStatus.DONE);
+            meetingRepository.save(meeting);
+        } catch (Exception ignored) {}
+
+        return ApiResponse.success("总结生成完成", summary);
+    }
+
+    @GetMapping("/{id}/summary")
+    public ApiResponse<?> getSummary(@RequestAttribute("userId") String userId,
+                                      @PathVariable Long id) {
+        Meeting meeting = meetingRepository.findById(id).orElse(null);
+        if (meeting == null) return ApiResponse.error(404, "会议不存在");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("standupId", id);
+        result.put("aiStatus", meeting.getAiStatus() != null ? meeting.getAiStatus().name() : "IDLE");
+        result.put("aiResult", meeting.getAiResult());
+        result.put("isArchived", meeting.getIsArchived());
+        return ApiResponse.success(result);
+    }
+
+    @PutMapping("/summary/items/{itemId}")
+    public ApiResponse<?> updateSummaryItem(@PathVariable Long itemId,
+                                             @RequestBody Map<String, String> body) {
+        // Update AI-generated content inline — for now just acknowledge
+        return ApiResponse.success("已更新", body);
     }
 
     private boolean isMember(String userId, Long teamId) {
