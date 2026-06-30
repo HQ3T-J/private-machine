@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.standupsync.dto.AnalysisResult;
 import com.standupsync.model.MeetingSpeech;
+import com.standupsync.model.User;
 import com.standupsync.model.User.AIConfig;
 import okhttp3.*;
 import org.slf4j.Logger;
@@ -398,5 +399,85 @@ public class AIService {
 
     private static String truncate(String s) {
         return s.length() > 300 ? s.substring(0, 300) + "..." : s;
+    }
+
+    /**
+     * 解析自由文本发言为结构化 昨天/今天/阻碍。
+     * 优先使用 LLM，不可用时降级为规则引擎。
+     */
+    public Map<String, String> parseFreeText(String text, com.standupsync.config.AIServerConfig aiConfig) {
+        if (aiConfig != null && aiConfig.isEnabled()) {
+            try {
+                return parseWithLLM(text, aiConfig);
+            } catch (Exception e) {
+                log.warn("AI 解析失败，降级为规则引擎: {}", e.getMessage());
+            }
+        }
+        return parseWithRules(text);
+    }
+
+    private Map<String, String> parseWithLLM(String text, com.standupsync.config.AIServerConfig aiConfig) throws IOException {
+        String prompt = """
+            你是站会秘书。从发言中提取"昨天完成了什么"、"今天计划做什么"、"有什么阻碍"。
+            返回纯JSON格式，不要markdown代码块:
+            {"yesterday": "...", "today": "...", "blockers": "..."}
+            如果某部分未提及，对应字段留空字符串。
+
+            发言内容:
+            """ + text;
+
+        User.AIConfig cfg = new User.AIConfig();
+        cfg.setProvider(aiConfig.getProvider());
+        cfg.setModel(aiConfig.getModel());
+        cfg.setApiKey(aiConfig.getApiKey());
+        if (aiConfig.getBaseUrl() != null && !aiConfig.getBaseUrl().isBlank())
+            cfg.setBaseUrl(aiConfig.getBaseUrl());
+        cfg.setTemperature(aiConfig.getTemperature());
+        cfg.setMaxTokens(aiConfig.getMaxTokens());
+
+        String response = callLLM(cfg,
+            "你是一个站会秘书助手，只返回JSON，不要任何额外文字。", prompt);
+        String json = extractJson(response);
+        return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+    }
+
+    private Map<String, String> parseWithRules(String text) {
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("yesterday", "");
+        result.put("today", "");
+        result.put("blockers", "");
+
+        String lower = text.toLowerCase();
+        String[] yesterdayKeys = {"昨天", "昨日", "完成了", "做了", "yesterday", "done", "finished", "accomplished"};
+        String[] todayKeys = {"今天", "今日", "计划", "要做", "准备", "today", "plan", "will", "going to"};
+        String[] blockerKeys = {"阻碍", "困难", "问题", "卡住", "需要帮助", "等待", "blocker", "blocked", "stuck", "need help", "waiting"};
+
+        List<int[]> segments = new ArrayList<>();
+        for (String kw : yesterdayKeys) { int i = lower.indexOf(kw); if (i >= 0) segments.add(new int[]{i, i + kw.length(), 0}); }
+        for (String kw : todayKeys) { int i = lower.indexOf(kw); if (i >= 0) segments.add(new int[]{i, i + kw.length(), 1}); }
+        for (String kw : blockerKeys) { int i = lower.indexOf(kw); if (i >= 0) segments.add(new int[]{i, i + kw.length(), 2}); }
+
+        if (segments.isEmpty()) {
+            result.put("today", text.trim());
+            return result;
+        }
+
+        segments.sort(java.util.Comparator.comparingInt(a -> a[0]));
+        for (int i = 0; i < segments.size(); i++) {
+            int[] seg = segments.get(i);
+            int start = seg[1];
+            int end = (i + 1 < segments.size()) ? segments.get(i + 1)[0] : text.length();
+            String content = text.substring(start, end).trim().replaceAll("^[：:，,。；;\\s]+", "").trim();
+            switch (seg[2]) {
+                case 0 -> result.put("yesterday", content);
+                case 1 -> result.put("today", content);
+                case 2 -> result.put("blockers", content);
+            }
+        }
+
+        if (result.get("today").isBlank() && result.get("yesterday").isBlank())
+            result.put("today", text.trim());
+
+        return result;
     }
 }

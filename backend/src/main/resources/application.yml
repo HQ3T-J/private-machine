@@ -25,6 +25,16 @@ jwt:
   secret: standupsync-jwt-secret-key-2026-very-long-secure
   expiration: 86400000
 
+# ═══ AI 服务配置（服务端统一管理，用户无需配置） ═══
+ai:
+  # 提供商: openai / doubao / tongyi / none（使用规则引擎降级）
+  provider: ${AI_PROVIDER:none}
+  model: ${AI_MODEL:gpt-4o}
+  api-key: ${AI_API_KEY:}
+  base-url: ${AI_BASE_URL:}
+  temperature: 0.7
+  max-tokens: 4096
+
 logging:
   level:
     com.standupsync: DEBUG

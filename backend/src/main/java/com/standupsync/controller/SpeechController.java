@@ -7,6 +7,8 @@ import com.standupsync.model.User;
 import com.standupsync.repository.MeetingRepository;
 import com.standupsync.repository.MeetingSpeechRepository;
 import com.standupsync.repository.TeamMemberRepository;
+import com.standupsync.service.AIService;
+import com.standupsync.config.AIServerConfig;
 
 import org.springframework.web.bind.annotation.*;
 
@@ -21,13 +23,19 @@ public class SpeechController {
     private final MeetingSpeechRepository meetingSpeechRepository;
     private final MeetingRepository meetingRepository;
     private final TeamMemberRepository teamMemberRepository;
+    private final AIService aiService;
+    private final AIServerConfig aiConfig;
 
     public SpeechController(MeetingSpeechRepository meetingSpeechRepository,
                             MeetingRepository meetingRepository,
-                            TeamMemberRepository teamMemberRepository) {
+                            TeamMemberRepository teamMemberRepository,
+                            AIService aiService,
+                            AIServerConfig aiConfig) {
         this.meetingSpeechRepository = meetingSpeechRepository;
         this.meetingRepository = meetingRepository;
         this.teamMemberRepository = teamMemberRepository;
+        this.aiService = aiService;
+        this.aiConfig = aiConfig;
     }
 
     /** 原始结构化三段式发言（兼容旧版） */
@@ -66,8 +74,8 @@ public class SpeechController {
 
         String inputMethod = body.getOrDefault("inputMethod", "TEXT");
 
-        // AI 解析自由文本
-        Map<String, String> parsed = parseFreeText(text);
+        // AI 解析自由文本（优先LLM，降级规则引擎）
+        Map<String, String> parsed = aiService.parseFreeText(text, aiConfig);
 
         MeetingSpeech speech = new MeetingSpeech();
         speech.setMeeting(meeting);
@@ -185,70 +193,6 @@ public class SpeechController {
         if ("VOICE".equalsIgnoreCase(im)) return MeetingSpeech.InputMethod.VOICE;
         if ("PASTE".equalsIgnoreCase(im)) return MeetingSpeech.InputMethod.PASTE;
         return MeetingSpeech.InputMethod.TEXT;
-    }
-
-    /**
-     * AI 自由文本解析：从一段自然语言中提取 昨日/今日/阻碍。
-     * 规则引擎降级方案，当 AI API 不可用时使用。
-     */
-    private Map<String, String> parseFreeText(String text) {
-        Map<String, String> result = new LinkedHashMap<>();
-        result.put("yesterday", "");
-        result.put("today", "");
-        result.put("blockers", "");
-
-        String lower = text.toLowerCase();
-
-        // 关键词分段
-        String[] yesterdayKeys = {"昨天", "昨日", "完成了", "做了", "yesterday", "done", "finished", "accomplished"};
-        String[] todayKeys = {"今天", "今日", "计划", "要做", "准备", "today", "plan", "will", "going to"};
-        String[] blockerKeys = {"阻碍", "困难", "问题", "卡住", "需要帮助", "等待", "blocker", "blocked", "stuck", "need help", "waiting"};
-
-        // 尝试按关键词拆分
-        List<int[]> segments = new ArrayList<>();
-        for (String kw : yesterdayKeys) {
-            int idx = lower.indexOf(kw);
-            if (idx >= 0) segments.add(new int[]{idx, idx + kw.length(), 0}); // 0=yesterday
-        }
-        for (String kw : todayKeys) {
-            int idx = lower.indexOf(kw);
-            if (idx >= 0) segments.add(new int[]{idx, idx + kw.length(), 1}); // 1=today
-        }
-        for (String kw : blockerKeys) {
-            int idx = lower.indexOf(kw);
-            if (idx >= 0) segments.add(new int[]{idx, idx + kw.length(), 2}); // 2=blockers
-        }
-
-        if (segments.isEmpty()) {
-            // 无明确关键词，全部归为 today
-            result.put("today", text.trim());
-            return result;
-        }
-
-        // 按位置排序
-        segments.sort(Comparator.comparingInt(a -> a[0]));
-
-        for (int i = 0; i < segments.size(); i++) {
-            int[] seg = segments.get(i);
-            int start = seg[1];
-            int end = (i + 1 < segments.size()) ? segments.get(i + 1)[0] : text.length();
-            String content = text.substring(start, end).trim();
-            // 去掉前导标点
-            content = content.replaceAll("^[：:，,。；;\\s]+", "").trim();
-
-            switch (seg[2]) {
-                case 0 -> result.put("yesterday", content);
-                case 1 -> result.put("today", content);
-                case 2 -> result.put("blockers", content);
-            }
-        }
-
-        // 如果没解析到 today，用全文
-        if (result.get("today").isBlank() && result.get("yesterday").isBlank()) {
-            result.put("today", text.trim());
-        }
-
-        return result;
     }
 
     private boolean isMember(String userId, Long teamId) {

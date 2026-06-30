@@ -81,7 +81,6 @@ class SettingsView(QWidget):
         layout.addWidget(title)
 
         layout.addWidget(self._create_profile_section())
-        layout.addWidget(self._create_ai_section())
         layout.addWidget(self._create_notification_section())
         layout.addWidget(self._create_appearance_section())
         layout.addStretch(1)
@@ -126,37 +125,6 @@ class SettingsView(QWidget):
         save.setCursor(Qt.PointingHandCursor)
         row.addWidget(save)
         gl.addLayout(row)
-        return g
-
-    # ── AI 设置 ──
-    def _create_ai_section(self) -> QGroupBox:
-        g = QGroupBox("AI 设置")
-        gl = QVBoxLayout(g)
-        gl.setSpacing(8)
-
-        self.provider_combo = QComboBox()
-        self.provider_combo.addItems(["豆包", "通义千问", "OpenAI", "自定义"])
-        self.provider_combo.setMinimumHeight(32)
-        gl.addWidget(self._labeled_row("服务商", self.provider_combo))
-
-        self.model_input = QLineEdit()
-        self.model_input.setPlaceholderText("例如: doubao-pro-32k")
-        self.model_input.setMinimumHeight(32)
-        gl.addWidget(self._labeled_row("模型", self.model_input))
-
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key_input.setPlaceholderText("输入 API Key")
-        self.api_key_input.setMinimumHeight(32)
-        gl.addWidget(self._labeled_row("API Key", self.api_key_input))
-
-        test_btn = QPushButton("测试连接")
-        test_btn.setFixedHeight(32)
-        test_btn.setCursor(Qt.PointingHandCursor)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        btn_row.addWidget(test_btn)
-        gl.addLayout(btn_row)
         return g
 
     # ── 通知设置（可交互开关） ──
