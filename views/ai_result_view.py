@@ -38,14 +38,6 @@ _BLOCKER_LABELS = {
     "tech": "技术", "resource": "资源", "communication": "沟通", "other": "其他",
 }
 
-# ── Mock 发言文本（演示用）──
-_MOCK_SPEECHES = """张三：昨天完成了登录模块重构，修复3个遗留bug。今天开始权限管理模块开发。阻碍：无。
-李四：昨天后端API联调完成。今天Code Review + 性能优化。阻碍：测试环境不稳定。
-王五：昨天权限管理模块开发完成80%。今天完成剩余20% + 单元测试。阻碍：需求方迟迟不确认权限模型。
-赵六：昨天数据库迁移脚本编写完成。今天部署到预发环境。阻碍：无。
-钱七：昨天CI/CD流水线搭建。今天前端打包优化 + E2E测试。阻碍：打包构建时间过长 >10min。"""
-
-
 class AIResultView(QWidget):
     """AI 纪要结果页。
 
@@ -145,13 +137,8 @@ class AIResultView(QWidget):
 
     # ── 激活 ──
     def activate(self, speeches=None, ai_config: AIConfig = None):
-        """激活页面：接收发言文本，调用 AI 引擎。
-
-        Args:
-            speeches: str 原始聊天记录文本，None 时使用 mock 数据
-            ai_config: AI 配置，None 时使用本地解析降级
-        """
-        self._speeches_text = speeches or _MOCK_SPEECHES
+        """激活页面：接收发言文本，调用 AI 引擎。"""
+        self._speeches_text = speeches or ""
         self._ai_config = ai_config
 
         self._show_loading(True)
@@ -241,27 +228,12 @@ class AIResultView(QWidget):
                     "assignee": speaker,
                 })
 
-        # 补充默认 Action Items
-        if not action_items:
-            action_items = [
-                {"content": "张三：本周五前完成权限模块开发", "priority": "high", "assignee": "张三"},
-                {"content": "赵六：周三前部署迁移脚本到预发", "priority": "medium", "assignee": "赵六"},
-                {"content": "李四：整理接口文档并同步前端", "priority": "low", "assignee": "李四"},
-                {"content": "钱七：联系运维协助优化构建流水线", "priority": "medium", "assignee": "钱七"},
-            ]
-        if not blockers:
-            blockers = [
-                {"member": "李四", "content": "测试环境不稳定，阻塞联调", "type": "resource"},
-                {"member": "钱七", "content": "前端打包构建时间过长（>10min）", "type": "tech"},
-                {"member": "王五", "content": "需求方迟迟不确认权限模型", "type": "communication"},
-            ]
-
         return {
             "yesterday_list": yesterday_list,
             "today_list": today_list,
             "blockers": blockers,
             "action_items": action_items,
-            "summary": "本次站会顺利完成，覆盖 5 名成员发言。",
+            "summary": "",
         }
 
     def _show_loading(self, visible: bool):

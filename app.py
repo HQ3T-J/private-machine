@@ -342,7 +342,7 @@ class MainWindow(QMainWindow):
 
     Usage:
         app = QApplication(sys.argv)
-        window = MainWindow(username="张三", role="Tech Lead")
+        window = MainWindow(username="admin", role="Tech Lead", api_client=None)
         window.show()
         sys.exit(app.exec())
     """
