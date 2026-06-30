@@ -28,10 +28,10 @@ jwt:
 # ═══ AI 服务配置（服务端统一管理，用户无需配置） ═══
 ai:
   # 提供商: openai / doubao / tongyi / none（使用规则引擎降级）
-  provider: ${AI_PROVIDER:none}
-  model: ${AI_MODEL:gpt-4o}
-  api-key: ${AI_API_KEY:}
-  base-url: ${AI_BASE_URL:}
+  provider: ${AI_PROVIDER:openai}
+  model: ${AI_MODEL:deepseek-chat}
+  api-key: ${AI_API_KEY:sk-566bcf89e49a41709bf2953c895ef6a7}
+  base-url: ${AI_BASE_URL:https://api.deepseek.com}
   temperature: 0.7
   max-tokens: 4096
 
