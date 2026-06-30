@@ -63,6 +63,11 @@ class APIClient:
         except Exception:
             return fallback
 
+    def _parse_error(self, resp) -> str:
+        """统一提取错误信息，兼容 msg / message 双字段"""
+        if not isinstance(resp, dict): return str(resp)
+        return resp.get("msg") or resp.get("message") or str(resp)
+
     # ═══════════════════════════════════════════════
     #  认证
     # ═══════════════════════════════════════════════
