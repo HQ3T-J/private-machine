@@ -82,6 +82,12 @@ public class MeetingWebSocketHandler extends TextWebSocketHandler {
             case "speech_update" -> handleSpeechUpdate(session, meetingId, userId, json);
             case "timer_sync" -> handleTimerSync(session, meetingId, userId, json);
             case "meeting_ended" -> handleMeetingEnded(session, meetingId, userId, json);
+            // 视频信令
+            case "video_join" -> handleVideoJoin(session, meetingId, userId, json);
+            case "video_offer" -> handleVideoSignal(session, meetingId, userId, json, "video_offer");
+            case "video_answer" -> handleVideoSignal(session, meetingId, userId, json, "video_answer");
+            case "ice_candidate" -> handleVideoSignal(session, meetingId, userId, json, "ice_candidate");
+            case "video_leave" -> handleVideoLeave(session, meetingId, userId, json);
             default -> log.warn("未知消息类型: {}", type);
         }
     }
@@ -210,6 +216,43 @@ public class MeetingWebSocketHandler extends TextWebSocketHandler {
             }
         }
         return null;
+    }
+
+    // ── 视频信令处理 ──
+
+    private void handleVideoJoin(WebSocketSession session, Long meetingId, String userId, JsonNode json)
+            throws IOException {
+        Map<String, Object> broadcast = new HashMap<>();
+        broadcast.put("type", "video_join");
+        broadcast.put("userId", userId);
+        broadcastToRoom(meetingId, objectMapper.writeValueAsString(broadcast));
+        log.info("视频加入: userId={}, meetingId={}", userId, meetingId);
+    }
+
+    private void handleVideoSignal(WebSocketSession session, Long meetingId, String userId,
+                                    JsonNode json, String signalType) throws IOException {
+        Map<String, Object> broadcast = new HashMap<>();
+        broadcast.put("type", signalType);
+        broadcast.put("userId", userId);
+        if (json.has("targetUserId"))
+            broadcast.put("targetUserId", json.get("targetUserId").asText());
+        if (json.has("sdp"))
+            broadcast.put("sdp", json.get("sdp").asText());
+        if (json.has("candidate"))
+            broadcast.put("candidate", json.get("candidate").asText());
+        if (json.has("sdpMid"))
+            broadcast.put("sdpMid", json.get("sdpMid").asText());
+        if (json.has("sdpMLineIndex"))
+            broadcast.put("sdpMLineIndex", json.get("sdpMLineIndex").asInt());
+        broadcastToRoom(meetingId, objectMapper.writeValueAsString(broadcast));
+    }
+
+    private void handleVideoLeave(WebSocketSession session, Long meetingId, String userId, JsonNode json)
+            throws IOException {
+        Map<String, Object> broadcast = new HashMap<>();
+        broadcast.put("type", "video_leave");
+        broadcast.put("userId", userId);
+        broadcastToRoom(meetingId, objectMapper.writeValueAsString(broadcast));
     }
 
     private void broadcastToRoom(Long meetingId, String message) {

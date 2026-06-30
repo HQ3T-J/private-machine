@@ -122,7 +122,12 @@ class APIClient:
         return []
 
     def create_meeting(self, team_id, sprint_no: str = None, title: str = None, participants: list = None) -> Optional[dict]:
-        body = {"teamId": team_id, "sprintNo": sprint_no}
+        body = {"teamId": team_id}
+        if sprint_no is not None:
+            try:
+                body["sprintNo"] = int(sprint_no)
+            except (ValueError, TypeError):
+                body["sprintNo"] = 1
         if title:
             body["title"] = title
         return self._post("/api/meetings", body)
@@ -136,6 +141,12 @@ class APIClient:
     def submit_speech(self, meeting_id: str, yesterday: str, today: str, blockers: str) -> Optional[dict]:
         return self._post(f"/api/meetings/{meeting_id}/speeches", {
             "yesterday": yesterday, "today": today, "blockers": blockers
+        })
+
+    def submit_free_speech(self, meeting_id: str, text: str, input_method: str = "TEXT") -> Optional[dict]:
+        """自由文本发言 — AI 自动解析"""
+        return self._post(f"/api/meetings/{meeting_id}/speeches/free", {
+            "text": text, "inputMethod": input_method
         })
 
     def get_speeches(self, meeting_id: str) -> list:
