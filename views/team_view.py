@@ -1,362 +1,320 @@
-# views/team_view.py — 团队管理页面
-"""团队管理视图：成员表格 + 权限操作 + 邀请码 + 创建/加入团队。"""
+"""团队管理 V3 — 双栏: 成员列表 + 入团审批面板 + 角色管理"""
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMenu, QApplication, QSizePolicy, QDialog, QLineEdit,
-    QFormLayout, QDialogButtonBox, QMessageBox,
+    QDialog, QLineEdit, QFormLayout, QDialogButtonBox,
+    QMessageBox, QMenu, QComboBox, QSplitter, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QColor, QBrush, QFont
+from PySide6.QtGui import QColor, QBrush
 
 ROLE_COLORS = {
-    "Tech Lead": "#4A9ED9", "TECH_LEAD": "#4A9ED9",
-    "Scrum Master": "#52C41A", "SCRUM_MASTER": "#52C41A",
-    "Developer": "#F5A623", "DEVELOPER": "#F5A623",
-    "Observer": "#8E8E9E", "OBSERVER": "#8E8E9E",
+    "TECH_LEAD": "#FFD700",
+    "SCRUM_MASTER": "#4A90D9",
+    "DEVELOPER": "#8E8E9E",
+    "OBSERVER": "#7B7B7B",
+}
+ROLE_LABELS = {
+    "TECH_LEAD": "技术主管",
+    "SCRUM_MASTER": "Scrum Master",
+    "DEVELOPER": "执行人员",
+    "OBSERVER": "观察者",
 }
 
 
 class CreateTeamDialog(QDialog):
-    """创建团队对话框"""
-
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self.setWindowTitle("创建新团队")
-        self.setFixedSize(340, 150)
+        self.setWindowTitle("创建团队")
+        self.setFixedSize(320, 120)
         layout = QFormLayout(self)
-        layout.setSpacing(12)
-        self._name_input = QLineEdit()
-        self._name_input.setPlaceholderText("例如: 核心开发组")
-        self._name_input.setMinimumHeight(32)
-        layout.addRow("团队名称:", self._name_input)
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.accepted.connect(self._on_create)
-        btn_box.rejected.connect(self.reject)
-        layout.addRow(btn_box)
+        self._name = QLineEdit(); self._name.setPlaceholderText("输入团队名称")
+        layout.addRow("名称:", self._name)
+        btn = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn.accepted.connect(self._on_create); btn.rejected.connect(self.reject)
+        layout.addRow(btn)
 
     def _on_create(self):
-        name = self._name_input.text().strip()
+        name = self._name.text().strip()
         if not name:
-            QMessageBox.warning(self, "提示", "请输入团队名称")
-            return
+            QMessageBox.warning(self, "提示", "请输入团队名称"); return
         if self.api_client:
-            resp = self.api_client._post("/api/teams", {"name": name})
-            if resp and resp.get("code") == 200:
-                self.accept()
-            else:
-                msg = resp.get("message", "服务器无响应") if isinstance(resp, dict) else "无法连接后端"
-                QMessageBox.warning(self, "创建失败", msg)
-        else:
-            QMessageBox.warning(self, "错误", "未连接到服务器")
+            r = self.api_client._post("/api/teams", {"name": name})
+            if r and r.get("code") == 200:
+                self.accept(); return
+        QMessageBox.warning(self, "错误", "创建失败，请检查后端连接")
+        self.accept()
 
 
 class JoinTeamDialog(QDialog):
-    """加入团队对话框"""
-
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.setWindowTitle("加入团队")
-        self.setFixedSize(340, 150)
+        self.setFixedSize(320, 120)
         layout = QFormLayout(self)
-        layout.setSpacing(12)
-        self._code_input = QLineEdit()
-        self._code_input.setPlaceholderText("输入6位邀请码")
-        self._code_input.setMinimumHeight(32)
-        layout.addRow("邀请码:", self._code_input)
-        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btn_box.accepted.connect(self._on_join)
-        btn_box.rejected.connect(self.reject)
-        layout.addRow(btn_box)
+        self._code = QLineEdit(); self._code.setPlaceholderText("输入6位邀请码")
+        layout.addRow("邀请码:", self._code)
+        btn = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn.accepted.connect(self._on_join); btn.rejected.connect(self.reject)
+        layout.addRow(btn)
 
     def _on_join(self):
-        code = self._code_input.text().strip().upper()
-        if len(code) < 4:
-            QMessageBox.warning(self, "提示", "邀请码格式不正确")
-            return
+        code = self._code.text().strip()
+        if not code: return
         if self.api_client:
-            self.api_client._post("/api/teams/join", {"code": code})
+            r = self.api_client.apply_to_join(code)
+            if r and r.get("code") == 200:
+                QMessageBox.information(self, "提示", r.get("message", "申请已提交"))
+                self.accept(); return
+            msg = r.get("message", "失败") if r else "后端无响应"
+            QMessageBox.warning(self, "提示", msg)
         self.accept()
 
 
 class TeamView(QWidget):
-    """团队管理页面"""
-
     title = "团队管理"
-    role_changed = Signal(str, str)
     member_removed = Signal(str)
     team_dissolved = Signal()
 
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
+        self._current_team_id = None
         self._members = []
         self._invite_code = None
-        self._current_team_id = None
-        self._current_role = "tech_lead"
+        self._current_role = None
         self._setup_ui()
 
-    @property
-    def current_role(self):
-        return self._current_role
+    def activate(self):
+        self._load_data()
 
-    @current_role.setter
-    def current_role(self, role: str):
-        self._current_role = role
-        self._update_dissolve_visibility()
+    def _load_data(self):
+        if not self.api_client: return
+        teams = self.api_client.get_teams()
+        if not teams:
+            self._current_team_id = None; self._clear_ui(); return
+        self._current_team_id = teams[0].get("id")
+        team_data = self.api_client._get(f"/api/teams/{self._current_team_id}")
+        if team_data:
+            self._members = team_data.get("members", [])
+            team = team_data.get("team", {})
+            self._invite_code = team.get("inviteCode", "N/A")
+            self._team_name_label.setText(team.get("name", ""))
+            self._invite_label.setText(f"📋 {self._invite_code}")
+        for m in self._members:
+            if m.get("user_id") == self.api_client.user_id:
+                self._current_role = m.get("role", "")
+                break
+        self._current_role = self.api_client.role or self._current_role
+        self._populate_members()
+        self._load_applications()
+
+    def _clear_ui(self):
+        self._members = []
+        self._current_team_id = None
+        self._team_name_label.setText("暂无团队")
+        self._invite_label.setText("📋 N/A")
+        self._populate_members()
+        self._app_table.setRowCount(0)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 16, 20, 16); layout.setSpacing(12)
 
-        # ── 顶部操作栏 ----
-        top_bar = QHBoxLayout()
-        title_lbl = QLabel("团队管理")
-        title_lbl.setStyleSheet("font-size: 20px; font-weight: bold;")
-        top_bar.addWidget(title_lbl)
-        top_bar.addStretch()
+        # ── 顶部栏 ──
+        top = QHBoxLayout()
+        self._team_name_label = QLabel("加载中...")
+        self._team_name_label.setStyleSheet("font-size:20px;font-weight:bold;")
+        top.addWidget(self._team_name_label)
+        top.addStretch()
+        self._invite_label = QLabel("📋 ...")
+        self._invite_label.setStyleSheet("font-size:14px;color:#4A90D9;font-family:monospace;")
+        top.addWidget(self._invite_label)
+        refresh_btn = QPushButton("🔄"); refresh_btn.setFixedSize(32,32)
+        refresh_btn.setStyleSheet("QPushButton{background:transparent;border:1px solid #555;border-radius:4px;font-size:14px;}")
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.clicked.connect(self._on_regenerate_code)
+        top.addWidget(refresh_btn)
+        layout.addLayout(top)
 
-        self._btn_create = QPushButton("+ 创建团队")
-        self._btn_create.setStyleSheet("""
-            QPushButton { background: #52C41A; color: #FFF; border: none;
-                border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: bold; }
-            QPushButton:hover { background: #45A818; }
-        """)
-        self._btn_create.setCursor(Qt.PointingHandCursor)
-        self._btn_create.clicked.connect(self._on_create_team)
-        top_bar.addWidget(self._btn_create)
+        # ── 按钮行 ──
+        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        create_btn = QPushButton("+ 创建团队")
+        create_btn.setStyleSheet("QPushButton{background:#238636;color:#FFF;border:none;border-radius:4px;padding:6px 14px;font-size:12px;}")
+        create_btn.setCursor(Qt.PointingHandCursor); create_btn.clicked.connect(self._on_create_team)
+        btn_row.addWidget(create_btn)
+        join_btn = QPushButton("📋 加入团队")
+        join_btn.setStyleSheet("QPushButton{background:transparent;color:#4A90D9;border:1px solid #4A90D9;border-radius:4px;padding:6px 14px;font-size:12px;}")
+        join_btn.setCursor(Qt.PointingHandCursor); join_btn.clicked.connect(self._on_join_team)
+        btn_row.addWidget(join_btn)
+        btn_row.addStretch()
+        dissolve_btn = QPushButton("🗑 解散团队")
+        dissolve_btn.setStyleSheet("QPushButton{background:transparent;color:#E74C3C;border:1px solid #E74C3C;border-radius:4px;padding:4px 10px;font-size:11px;}")
+        dissolve_btn.setCursor(Qt.PointingHandCursor); dissolve_btn.clicked.connect(self._on_dissolve)
+        btn_row.addWidget(dissolve_btn)
+        layout.addLayout(btn_row)
 
-        self._btn_join = QPushButton("加入团队")
-        self._btn_join.setStyleSheet("""
-            QPushButton { background: #4A90D9; color: #FFF; border: none;
-                border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: bold; }
-            QPushButton:hover { background: #5BA0E9; }
-        """)
-        self._btn_join.setCursor(Qt.PointingHandCursor)
-        self._btn_join.clicked.connect(self._on_join_team)
-        top_bar.addWidget(self._btn_join)
-        layout.addLayout(top_bar)
+        # ── 双栏主体 ──
+        splitter = QSplitter(Qt.Horizontal)
 
-        # ── 邀请码栏 ----
-        invite_bar = QHBoxLayout()
-        invite_label = QLabel("邀请码：")
-        invite_label.setStyleSheet("font-size: 13px;")
-        self._invite_code_label = QLabel("N/A")
-        self._invite_code_label.setStyleSheet(
-            "font-family: 'Consolas', monospace; font-size: 20px; font-weight: bold; "
-            "color: #4A9ED9; padding: 6px 16px; border-radius: 4px;"
-        )
-        self._btn_copy = QPushButton("复制")
-        self._btn_copy.setObjectName("btnCopyInvite")
-        self._btn_copy.setCursor(Qt.PointingHandCursor)
-        self._btn_copy.clicked.connect(self._on_copy_invite)
-        invite_bar.addWidget(invite_label)
-        invite_bar.addWidget(self._invite_code_label)
-        invite_bar.addWidget(self._btn_copy)
-        invite_bar.addStretch()
-        layout.addLayout(invite_bar)
-
-        # ── 成员表格 ----
+        # 左：成员列表
+        left = QFrame(); left.setStyleSheet("QFrame{background:#161B22;border-radius:8px;}")
+        ll = QVBoxLayout(left); ll.setContentsMargins(10,8,10,8)
+        ll.addWidget(QLabel("👥 成员列表")); ll.itemAt(0).widget().setStyleSheet("font-size:13px;font-weight:bold;")
         self._table = QTableWidget()
-        self._table.setColumnCount(5)
-        self._table.setHorizontalHeaderLabels(["成员", "身份", "出勤率", "完成率", "操作"])
-        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._table.setColumnCount(3)
+        self._table.setHorizontalHeaderLabels(["成员", "角色", "操作"])
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._table.setShowGrid(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.verticalHeader().setVisible(False)
+        self._table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._table.setShowGrid(False); self._table.verticalHeader().setVisible(False)
+        h = self._table.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.Fixed); self._table.setColumnWidth(1, 80)
+        h.setSectionResizeMode(2, QHeaderView.Fixed); self._table.setColumnWidth(2, 80)
+        self._table.setStyleSheet("QTableWidget{border:none;font-size:12px;} QTableWidget::item{padding:4px;}")
         self._table.setContextMenuPolicy(Qt.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_context_menu)
+        ll.addWidget(self._table)
+        splitter.addWidget(left)
 
-        header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.Fixed)
-        self._table.setColumnWidth(1, 120)
-        header.setSectionResizeMode(2, QHeaderView.Fixed)
-        self._table.setColumnWidth(2, 80)
-        header.setSectionResizeMode(3, QHeaderView.Fixed)
-        self._table.setColumnWidth(3, 80)
-        header.setSectionResizeMode(4, QHeaderView.Fixed)
-        self._table.setColumnWidth(4, 100)
+        # 右：审批面板
+        right = QFrame(); right.setObjectName("ApprovalPanel")
+        right.setStyleSheet("#ApprovalPanel{background:#161B22;border-radius:8px;}")
+        rl = QVBoxLayout(right); rl.setContentsMargins(10,8,10,8)
+        rl.addWidget(QLabel("📋 入团申请")); rl.itemAt(0).widget().setStyleSheet("font-size:13px;font-weight:bold;")
+        self._app_table = QTableWidget()
+        self._app_table.setColumnCount(4)
+        self._app_table.setHorizontalHeaderLabels(["申请人", "时间", "", ""])
+        self._app_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._app_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self._app_table.setShowGrid(False); self._app_table.verticalHeader().setVisible(False)
+        ah = self._app_table.horizontalHeader()
+        ah.setSectionResizeMode(0, QHeaderView.Stretch)
+        ah.setSectionResizeMode(1, QHeaderView.Fixed); self._app_table.setColumnWidth(1, 80)
+        ah.setSectionResizeMode(2, QHeaderView.Fixed); self._app_table.setColumnWidth(2, 70)
+        ah.setSectionResizeMode(3, QHeaderView.Fixed); self._app_table.setColumnWidth(3, 70)
+        self._app_table.setStyleSheet("QTableWidget{border:none;font-size:12px;}")
+        rl.addWidget(self._app_table)
+        splitter.addWidget(right)
 
-        self._table.setStyleSheet("""
-            QTableWidget { border: none; border-radius: 8px; font-size: 13px; }
-            QTableWidget::item { padding: 8px 6px; }
-            QHeaderView::section { padding: 8px 6px; border: none; font-size: 12px; font-weight: bold; }
-        """)
-        layout.addWidget(self._table, 1)
+        splitter.setSizes([400, 350])
+        layout.addWidget(splitter, 1)
 
-        # ── 底部 ---- 
-        bottom_bar = QHBoxLayout()
-        self._btn_dissolve = QPushButton("解散团队")
-        self._btn_dissolve.setObjectName("btnDissolve")
-        self._btn_dissolve.setCursor(Qt.PointingHandCursor)
-        self._btn_dissolve.clicked.connect(self._on_dissolve_team)
-        bottom_bar.addStretch()
-        bottom_bar.addWidget(self._btn_dissolve)
-        layout.addLayout(bottom_bar)
-        self._update_dissolve_visibility()
-
-        self.setStyleSheet("""
-            #btnCopyInvite { background: #4A9ED9; color: #FFF; border: none;
-                border-radius: 4px; padding: 8px 14px; font-size: 12px; font-weight: bold; }
-            #btnCopyInvite:hover { background: #3A8EC9; }
-            #btnDissolve { background: #E74C3C; color: #FFF; border: none;
-                border-radius: 4px; padding: 10px 24px; font-size: 13px; font-weight: bold; }
-            #btnDissolve:hover { background: #C0392B; }
-        """)
-
-    def _update_dissolve_visibility(self):
-        if hasattr(self, "_btn_dissolve"):
-            self._btn_dissolve.setVisible(
-                self._current_role.lower() in ("tech_lead", "techlead")
-            )
-
-    def activate(self):
-        """页面激活时刷新"""
-        if self.api_client:
-            teams = self.api_client.get_teams()
-            if teams:
-                self._current_team_id = teams[0].get("id")
-                self._invite_code = self.api_client.get_invite_code(str(self._current_team_id))
-                self._members = self.api_client.get_team_members(str(self._current_team_id))
-            else:
-                self._current_team_id = None
-                self._invite_code = None
-                self._members = []
-        else:
-            self._invite_code = None
-            self._members = []
-        self._invite_code_label.setText(self._invite_code or "N/A")
-        self._populate_table()
-
-    def _populate_table(self):
+    # ── 成员填充 ──
+    def _populate_members(self):
         self._table.setRowCount(len(self._members))
-        for row, member in enumerate(self._members):
-            # 成员名：name > username > display_name > user_id
-            name = (member.get("name") or member.get("username") or
-                    member.get("display_name") or member.get("user_id") or "?")
-            name_item = QTableWidgetItem(name)
-            name_font = name_item.font()
-            name_font.setBold(True)
-            name_item.setFont(name_font)
-            self._table.setItem(row, 0, name_item)
-
-            role = member.get("role", "?")
-            role_item = QTableWidgetItem(role)
-            role_item.setTextAlignment(Qt.AlignCenter)
+        for row, m in enumerate(self._members):
+            name = m.get("name") or m.get("username") or m.get("user_id", "?")
+            role = m.get("role", "DEVELOPER")
             role_color = ROLE_COLORS.get(role, "#8E8E9E")
-            role_item.setForeground(QBrush(QColor(role_color)))
-            role_font = role_item.font()
-            role_font.setBold(True)
-            role_item.setFont(role_font)
-            self._table.setItem(row, 1, role_item)
+            role_label = ROLE_LABELS.get(role, role)
 
-            # 出勤率/完成率 来自 Dashboard，团队列表暂不显示
-            att_item = QTableWidgetItem("—")
-            att_item.setTextAlignment(Qt.AlignCenter)
-            self._table.setItem(row, 2, att_item)
-
-            comp_item = QTableWidgetItem("—")
-            comp_item.setTextAlignment(Qt.AlignCenter)
-            self._table.setItem(row, 3, comp_item)
-
-            role_lower = role.lower()
-            if role_lower in ("developer", "observer"):
+            # 名称
+            self._table.setItem(row, 0, QTableWidgetItem(name))
+            # 角色
+            ri = QTableWidgetItem(role_label); ri.setTextAlignment(Qt.AlignCenter)
+            ri.setForeground(QBrush(QColor(role_color)))
+            self._table.setItem(row, 1, ri)
+            # 操作按钮 — 仅管理员可见
+            if self._current_role in ("TECH_LEAD", "SCRUM_MASTER"):
                 btn = QPushButton("移除")
+                btn.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;}")
                 btn.setCursor(Qt.PointingHandCursor)
-                btn.setFixedSize(50, 26)
-                btn.setStyleSheet("""
-                    QPushButton { background: transparent; color: #E74C3C;
-                        border: 1px solid #E74C3C; border-radius: 3px; padding: 4px 8px; font-size: 11px; }
-                    QPushButton:hover { background: #E74C3C; color: #FFF; }
-                """)
-                mid = member.get("id") or member.get("user_id")
+                uid = m.get("user_id")
                 r = row
-                btn.clicked.connect(lambda checked, mid=mid, row=r: self._remove_member(mid, row))
-                self._table.setCellWidget(row, 4, btn)
-            else:
-                placeholder = QTableWidgetItem("—")
-                placeholder.setTextAlignment(Qt.AlignCenter)
-                placeholder.setFlags(Qt.NoItemFlags)
-                self._table.setItem(row, 4, placeholder)
+                btn.clicked.connect(lambda checked, uid=uid, row=r: self._remove_member(uid, row))
+                container = QWidget()
+                cl = QHBoxLayout(container); cl.setContentsMargins(0,0,0,0); cl.setAlignment(Qt.AlignCenter)
+                cl.addWidget(btn); self._table.setCellWidget(row, 2, container)
 
+    # ── 审批面板填充 ──
+    def _load_applications(self):
+        if not self._current_team_id or not self.api_client: return
+        if self._current_role not in ("TECH_LEAD", "SCRUM_MASTER"):
+            self._app_table.setRowCount(0); return
+        apps = self.api_client.get_applications(self._current_team_id)
+        self._app_table.setRowCount(len(apps))
+        for row, a in enumerate(apps):
+            self._app_table.setItem(row, 0, QTableWidgetItem(a.get("name", "?")))
+            t = a.get("createdAt", "")[:16] if a.get("createdAt") else ""
+            self._app_table.setItem(row, 1, QTableWidgetItem(t))
+            approve = QPushButton("✓ 批准")
+            approve.setStyleSheet("QPushButton{color:#238636;border:1px solid #238636;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;} QPushButton:hover{background:#238636;color:#FFF;}")
+            approve.setCursor(Qt.PointingHandCursor)
+            aid = a.get("id")
+            approve.clicked.connect(lambda checked, aid=aid: self._on_approve(aid))
+            self._app_table.setCellWidget(row, 2, approve)
+            reject = QPushButton("✕ 拒绝")
+            reject.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;} QPushButton:hover{background:#E74C3C;color:#FFF;}")
+            reject.setCursor(Qt.PointingHandCursor)
+            reject.clicked.connect(lambda checked, aid=aid: self._on_reject(aid))
+            self._app_table.setCellWidget(row, 3, reject)
+
+    # ── 右键菜单 ──
+    def _on_context_menu(self, pos):
+        if self._current_role != "TECH_LEAD": return
+        row = self._table.indexAt(pos).row()
+        if row < 0 or row >= len(self._members): return
+        m = self._members[row]
+        menu = QMenu(self)
+        for role_key in ("SCRUM_MASTER", "DEVELOPER", "OBSERVER"):
+            act = menu.addAction(f"改为{ROLE_LABELS[role_key]}")
+            act.triggered.connect(lambda checked, uid=m["user_id"], r=role_key: self._on_change_role(uid, r))
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    # ── 操作 ──
     def _on_create_team(self):
         dlg = CreateTeamDialog(self.api_client, self)
-        if dlg.exec() == QDialog.Accepted:
-            self.activate()
+        if dlg.exec() == QDialog.Accepted: self._load_data()
 
     def _on_join_team(self):
         dlg = JoinTeamDialog(self.api_client, self)
-        if dlg.exec() == QDialog.Accepted:
-            self.activate()
+        if dlg.exec() == QDialog.Accepted: self._load_data()
 
-    def _on_copy_invite(self):
-        clipboard = QApplication.clipboard()
-        clipboard.setText(self._invite_code or "")
-        self._btn_copy.setText("已复制")
-        self._btn_copy.setStyleSheet("""
-            #btnCopyInvite { background: #52C41A; color: #FFF; border: none;
-                border-radius: 4px; padding: 8px 14px; font-size: 12px; font-weight: bold; }
-        """)
+    def _on_regenerate_code(self):
+        if not self.api_client or not self._current_team_id: return
+        if self._current_role != "TECH_LEAD":
+            QMessageBox.warning(self, "提示", "只有技术主管可以重新生成邀请码"); return
+        r = self.api_client.regenerate_invite_code(self._current_team_id)
+        if r and r.get("code") == 200:
+            self._invite_code = r.get("data") or r.get("message", "")
+            self._invite_label.setText(f"📋 {self._invite_code}")
 
-    def _remove_member(self, member_id, row):
-        if self.api_client and self._current_team_id:
-            try:
-                import requests
-                from api_client import APIClient
-                requests.delete(
-                    f"{APIClient.base_url()}/api/teams/{self._current_team_id}/members/{member_id}",
-                    headers=self.api_client._headers(), timeout=5)
-            except Exception:
-                pass
-        if 0 <= row < len(self._members):
-            del self._members[row]
-            self._populate_table()
-            self.member_removed.emit(str(member_id))
+    def _on_approve(self, app_id):
+        r = self.api_client.approve_application(self._current_team_id, app_id)
+        if r and r.get("code") == 200: self._load_data()
 
-    def _on_dissolve_team(self):
-        reply = QMessageBox.question(self, "确认", "确定要解散团队吗？此操作不可撤销。",
-                                      QMessageBox.Yes | QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
-        if self.api_client and self._current_team_id:
-            try:
-                import requests
-                from api_client import APIClient
-                requests.delete(
-                    f"{APIClient.base_url()}/api/teams/{self._current_team_id}",
-                    headers=self.api_client._headers(), timeout=5)
-            except Exception:
-                pass
-        self._members.clear()
-        self._current_team_id = None
-        self._invite_code = None
-        self._invite_code_label.setText("N/A")
-        self._populate_table()
-        self.team_dissolved.emit()
+    def _on_reject(self, app_id):
+        r = self.api_client.reject_application(self._current_team_id, app_id)
+        if r and r.get("code") == 200: self._load_data()
 
-    def _on_context_menu(self, pos):
-        idx = self._table.indexAt(pos)
-        if not idx.isValid():
-            return
-        row = idx.row()
-        if row < 0 or row >= len(self._members):
-            return
-        member = self._members[row]
-        mid = member.get("id") or member.get("user_id")
-        role = member.get("role", "")
-        menu = QMenu(self)
-        act_edit = QAction("编辑角色", menu)
-        act_edit.triggered.connect(lambda: QMessageBox.information(self, "提示", "角色编辑功能即将开放"))
-        menu.addAction(act_edit)
-        if role.lower() in ("developer", "observer"):
-            act_remove = QAction("移除成员", menu)
-            act_remove.triggered.connect(lambda: self._remove_member(mid, row))
-            menu.addAction(act_remove)
-        menu.exec(self._table.viewport().mapToGlobal(pos))
+    def _on_change_role(self, user_id, new_role):
+        r = self.api_client.change_member_role(self._current_team_id, user_id, new_role)
+        if r and r.get("code") == 200: self._load_data()
+        else:
+            msg = r.get("message", "操作失败") if r else "后端无响应"
+            QMessageBox.warning(self, "提示", msg)
+
+    def _remove_member(self, user_id, row):
+        try:
+            import requests
+            from api_client import APIClient
+            requests.delete(
+                f"{APIClient.base_url()}/api/teams/{self._current_team_id}/members/{user_id}",
+                headers=self.api_client._headers(), timeout=5)
+            if 0 <= row < len(self._members): del self._members[row]
+            self._populate_members()
+            self.member_removed.emit(str(user_id))
+        except Exception: pass
+
+    def _on_dissolve(self):
+        if self._current_role != "TECH_LEAD":
+            QMessageBox.warning(self, "提示", "只有技术主管可以解散团队"); return
+        reply = QMessageBox.question(self, "确认", "确定要解散团队吗？此操作不可撤销。", QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes: return
+        r = self.api_client.dissolve_team(self._current_team_id)
+        if r and r.get("code") == 200:
+            self._clear_ui(); self.team_dissolved.emit()

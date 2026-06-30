@@ -60,8 +60,13 @@ class SettingsView(QWidget):
     def activate(self):
         """页面激活时刷新用户信息"""
         if self.api_client:
-            self.nickname_input.setText(self.api_client.username or "")
-            self.role_label.setText(self.api_client.role or "—")
+            profile = self.api_client.get_profile()
+            if profile:
+                self.nickname_input.setText(profile.get("displayName") or profile.get("username", ""))
+                self.role_label.setText(profile.get("role") or self.api_client.role or "—")
+            else:
+                self.nickname_input.setText(self.api_client.username or "")
+                self.role_label.setText(self.api_client.role or "—")
 
     def _on_logout(self):
         from PySide6.QtWidgets import QApplication, QMessageBox

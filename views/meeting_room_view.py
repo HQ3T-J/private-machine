@@ -90,7 +90,7 @@ class MeetingRoomView(QWidget):
         self._members = []
         self._speeches = []
         self._current_speaker_idx = 0
-        self._timer_seconds = 120
+        self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
         self._video_users = set()
         self._ws = None  # WebSocket connection
 
@@ -386,7 +386,7 @@ class MeetingRoomView(QWidget):
             self._current_speaker_idx += 1
             self._load_meeting_data()
             self._refresh_all()
-            self._timer_seconds = 120
+            self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
             self._timer_label.setText("⏱ 02:00")
         else:
             msg = resp.get("message", "未知错误") if isinstance(resp, dict) else "后端无响应"
@@ -400,7 +400,7 @@ class MeetingRoomView(QWidget):
         self._ai_preview.setVisible(False)
         self._text_edit.clear()
         self._refresh_all()
-        self._timer_seconds = 120
+        self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
         self._timer_label.setText("⏱ 02:00")
 
     def _on_voice_input(self):

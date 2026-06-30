@@ -214,3 +214,63 @@ class APIClient:
     def get_member_ranking(self, team_id) -> list:
         online = self._get(f"/api/dashboard/member-ranking?teamId={team_id}")
         return online if isinstance(online, list) else []
+
+    # ═══ Phase2: 站会增强 ═══
+    def paste_chat(self, meeting_id: str, text: str) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/paste", {"text": text})
+
+    def classify_text(self, meeting_id: str, text: str) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/classify", {"text": text})
+
+    def generate_summary(self, meeting_id: str) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/summary/generate", {})
+
+    def get_summary(self, meeting_id: str) -> Optional[dict]:
+        return self._get(f"/api/meetings/{meeting_id}/summary")
+
+    def update_summary_item(self, item_id: str, updates: dict) -> Optional[dict]:
+        return self._post(f"/api/meetings/summary/items/{item_id}", updates)
+
+    # ═══ Phase3: 团队申请审批 ═══
+    def apply_to_join(self, invite_code: str) -> Optional[dict]:
+        return self._post("/api/teams/join", {"inviteCode": invite_code})
+
+    def get_applications(self, team_id) -> Optional[list]:
+        data = self._get(f"/api/teams/{team_id}/applications")
+        return data if isinstance(data, list) else []
+
+    def approve_application(self, team_id, app_id) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}/applications/{app_id}/approve", {})
+
+    def reject_application(self, team_id, app_id) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}/applications/{app_id}/reject", {})
+
+    def change_member_role(self, team_id, user_id: str, role: str) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}/members/{user_id}/role", {"role": role})
+
+    def update_team_name(self, team_id, name: str) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}", {"name": name})
+
+    def regenerate_invite_code(self, team_id) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}/invite-code", {})
+
+    def dissolve_team(self, team_id) -> Optional[dict]:
+        return self._post(f"/api/teams/{team_id}/dissolve", {})
+
+    # ═══ Phase4: Auth ═══
+    def get_profile(self) -> Optional[dict]:
+        return self._get("/api/auth/profile")
+
+    def logout(self) -> Optional[dict]:
+        return self._post("/api/auth/logout", {})
+
+    # ═══ Phase5: 待办+看板 ═══
+    def get_unfinished_todos(self) -> list:
+        data = self._get("/api/todos/unfinished")
+        return data if isinstance(data, list) else []
+
+    def get_dashboard_kpi(self, team_id) -> Optional[dict]:
+        return self._get(f"/api/dashboard/kpi?teamId={team_id}")
+
+    def get_dashboard_trends(self, team_id) -> Optional[dict]:
+        return self._get(f"/api/dashboard/trends?teamId={team_id}")
