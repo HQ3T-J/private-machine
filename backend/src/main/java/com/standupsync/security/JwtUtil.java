@@ -9,18 +9,24 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class JwtUtil {
 
     private final SecretKey key;
     private final long expiration;
+    private final Set<String> blacklist = ConcurrentHashMap.newKeySet();
 
     public JwtUtil(@Value("${jwt.secret}") String secret,
                    @Value("${jwt.expiration}") long expiration) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = expiration;
     }
+
+    public void addToBlacklist(String token) { blacklist.add(token); }
+    public boolean isBlacklisted(String token) { return blacklist.contains(token); }
 
     public String generateToken(String userId) {
         Date now = new Date();
