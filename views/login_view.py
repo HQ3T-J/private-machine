@@ -1,15 +1,14 @@
-"""登录窗口 (QDialog) - StandupSync"""
+"""登录/注册窗口 - StandupSync"""
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QMessageBox, QSpacerItem, QSizePolicy
+    QPushButton, QMessageBox, QStackedWidget, QFrame, QSizePolicy,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QPixmap
 
 
 class LoginWindow(QDialog):
-    """登录窗口"""
+    """登录+注册窗口 — QStackedWidget 切换两张表单"""
 
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
@@ -17,99 +16,135 @@ class LoginWindow(QDialog):
         self.username = ""
         self.role = ""
         self.setWindowTitle("StandupSync - 登录")
-        self.setFixedSize(400, 400)
+        self.setFixedSize(420, 460)
         self.setStyleSheet("""
             QLineEdit {
-                border-radius: 6px;
-                padding: 10px 12px;
-                font-size: 14px;
+                border-radius: 6px; padding: 10px 12px; font-size: 14px;
+                border: 1px solid #555; background: #0D1117; color: #C0C0D0;
             }
-            QPushButton#login_btn {
-                background-color: #4A90D9;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
-                font-size: 15px;
-                font-weight: bold;
+            QLineEdit:focus { border: 1px solid #4A90D9; }
+            QPushButton#action_btn {
+                background-color: #4A90D9; color: #FFF; border: none;
+                border-radius: 8px; font-size: 15px; font-weight: bold;
             }
-            QPushButton#login_btn:hover {
-                background-color: #5BA0E9;
-            }
-            QPushButton#login_btn:pressed {
-                background-color: #3A80C9;
-            }
-            QLabel#signup_link {
-                color: #4A90D9;
-                font-size: 13px;
-            }
-            QLabel#signup_link:hover {
-                color: #6AB0F9;
-            }
+            QPushButton#action_btn:hover { background-color: #5BA0E9; }
+            QPushButton#action_btn:pressed { background-color: #3A80C9; }
+            QPushButton#action_btn:disabled { background-color: #3A5A7A; }
+            QLabel#switch_link { color: #4A90D9; font-size: 13px; }
+            QLabel#switch_link:hover { color: #6AB0F9; }
+            QLabel#error_label { color: #E74C3C; font-size: 12px; }
+            QLabel#hint_label { color: #F5A623; font-size: 11px; }
         """)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 30, 40, 30)
-        layout.setSpacing(15)
+        layout.setContentsMargins(40, 30, 40, 30); layout.setSpacing(12)
 
-        icon_label = QLabel("📋")
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 48px;")
-        layout.addWidget(icon_label)
+        # Logo
+        icon = QLabel("📋"); icon.setAlignment(Qt.AlignCenter)
+        icon.setStyleSheet("font-size: 48px;"); layout.addWidget(icon)
 
-        title = QLabel("StandupSync")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("color: #4A90D9; font-size: 22px; font-weight: bold;")
-        layout.addWidget(title)
+        self._title = QLabel("StandupSync")
+        self._title.setAlignment(Qt.AlignCenter)
+        self._title.setStyleSheet("color:#4A90D9;font-size:22px;font-weight:bold;")
+        layout.addWidget(self._title)
 
-        layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Fixed))
+        # 堆栈：两张表单
+        self._stack = QStackedWidget()
+        self._login_form = self._create_login_form()
+        self._register_form = self._create_register_form()
+        self._stack.addWidget(self._login_form)   # index 0
+        self._stack.addWidget(self._register_form) # index 1
+        layout.addWidget(self._stack)
 
-        card_layout = QVBoxLayout()
-        card_layout.setSpacing(12)
+        layout.addStretch()
 
-        self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("用户名")
-        self.username_input.setMinimumHeight(40)
-        card_layout.addWidget(self.username_input)
+    # ═══════════════════════════════════════════════════
+    #  登录表单
+    # ═══════════════════════════════════════════════════
+    def _create_login_form(self) -> QFrame:
+        f = QFrame()
+        l = QVBoxLayout(f); l.setContentsMargins(0, 0, 0, 0); l.setSpacing(12)
 
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_input.setPlaceholderText("密码")
-        self.password_input.setMinimumHeight(40)
-        card_layout.addWidget(self.password_input)
+        self._login_user = QLineEdit(); self._login_user.setPlaceholderText("用户名")
+        self._login_user.setMinimumHeight(40); l.addWidget(self._login_user)
 
-        self.login_btn = QPushButton("登  录")
-        self.login_btn.setObjectName("login_btn")
-        self.login_btn.setMinimumHeight(40)
-        self.login_btn.setCursor(Qt.PointingHandCursor)
-        self.login_btn.clicked.connect(self._on_login)
-        card_layout.addWidget(self.login_btn)
+        self._login_pass = QLineEdit(); self._login_pass.setPlaceholderText("密码")
+        self._login_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self._login_pass.setMinimumHeight(40); l.addWidget(self._login_pass)
+        self._login_pass.returnPressed.connect(self._on_login)
 
-        layout.addLayout(card_layout)
-        layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self._login_error = QLabel(""); self._login_error.setObjectName("error_label")
+        self._login_error.setAlignment(Qt.AlignCenter); l.addWidget(self._login_error)
 
-        self._status_label = QLabel("")
-        self._status_label.setAlignment(Qt.AlignCenter)
-        self._status_label.setStyleSheet("color: #8E8E9E; font-size: 12px;")
-        layout.addWidget(self._status_label)
+        self._login_btn = QPushButton("登  录")
+        self._login_btn.setObjectName("action_btn"); self._login_btn.setMinimumHeight(42)
+        self._login_btn.setCursor(Qt.PointingHandCursor)
+        self._login_btn.clicked.connect(self._on_login); l.addWidget(self._login_btn)
 
-        signup_label = QLabel('<a href="#" style="color: #4A90D9; text-decoration: none;">还没有账号？注册</a>')
-        signup_label.setObjectName("signup_link")
-        signup_label.setAlignment(Qt.AlignCenter)
-        signup_label.setCursor(Qt.PointingHandCursor)
-        signup_label.linkActivated.connect(self._on_signup)
-        layout.addWidget(signup_label)
+        switch = QLabel('<a href="#" style="color:#4A90D9;text-decoration:none;">没有账号？注册</a>')
+        switch.setObjectName("switch_link"); switch.setAlignment(Qt.AlignCenter)
+        switch.setCursor(Qt.PointingHandCursor)
+        switch.linkActivated.connect(lambda: self._show_form(1)); l.addWidget(switch)
+        return f
 
+    # ═══════════════════════════════════════════════════
+    #  注册表单
+    # ═══════════════════════════════════════════════════
+    def _create_register_form(self) -> QFrame:
+        f = QFrame()
+        l = QVBoxLayout(f); l.setContentsMargins(0, 0, 0, 0); l.setSpacing(12)
+
+        self._reg_user = QLineEdit(); self._reg_user.setPlaceholderText("用户名 (必填，至少3位)")
+        self._reg_user.setMinimumHeight(40); l.addWidget(self._reg_user)
+
+        self._reg_pass = QLineEdit(); self._reg_pass.setPlaceholderText("密码 (必填，至少4位)")
+        self._reg_pass.setEchoMode(QLineEdit.EchoMode.Password)
+        self._reg_pass.setMinimumHeight(40); l.addWidget(self._reg_pass)
+        self._reg_pass.returnPressed.connect(self._on_register)
+
+        self._reg_nick = QLineEdit(); self._reg_nick.setPlaceholderText("昵称 (可选，默认同用户名)")
+        self._reg_nick.setMinimumHeight(40); l.addWidget(self._reg_nick)
+
+        self._reg_hint = QLabel("")
+        self._reg_hint.setObjectName("hint_label"); self._reg_hint.setAlignment(Qt.AlignCenter)
+        l.addWidget(self._reg_hint)
+
+        self._reg_btn = QPushButton("注  册")
+        self._reg_btn.setObjectName("action_btn"); self._reg_btn.setMinimumHeight(42)
+        self._reg_btn.setCursor(Qt.PointingHandCursor)
+        self._reg_btn.clicked.connect(self._on_register); l.addWidget(self._reg_btn)
+
+        switch = QLabel('<a href="#" style="color:#4A90D9;text-decoration:none;">已有账号？返回登录</a>')
+        switch.setObjectName("switch_link"); switch.setAlignment(Qt.AlignCenter)
+        switch.setCursor(Qt.PointingHandCursor)
+        switch.linkActivated.connect(lambda: self._show_form(0)); l.addWidget(switch)
+        return f
+
+    # ── 表单切换 ──
+    def _show_form(self, idx):
+        self._stack.setCurrentIndex(idx)
+        if idx == 0:
+            self._title.setText("StandupSync"); self._login_error.setText("")
+        else:
+            self._title.setText("注册账号"); self._reg_hint.setText("")
+        # 清空字段
+        self._login_user.clear(); self._login_pass.clear()
+        self._reg_user.clear(); self._reg_pass.clear(); self._reg_nick.clear()
+
+    # ═══════════════════════════════════════════════════
+    #  登录
+    # ═══════════════════════════════════════════════════
     def _on_login(self):
-        username = self.username_input.text().strip()
-        password = self.password_input.text().strip()
+        username = self._login_user.text().strip()
+        password = self._login_pass.text().strip()
         if not username or not password:
-            QMessageBox.warning(self, "提示", "请输入用户名和密码")
-            return
+            self._login_error.setText("请输入用户名和密码"); return
+        if len(password) < 2:  # P2: 前端最小长度校验
+            self._login_error.setText("密码至少2位"); return
 
-        self._status_label.setText("正在连接服务器...")
-        self.login_btn.setEnabled(False)
+        self._login_error.setText("正在连接..."); self._login_btn.setEnabled(False)
 
         try:
             from api_client import APIClient
@@ -121,21 +156,73 @@ class LoginWindow(QDialog):
                 self.role = client.role or "DEVELOPER"
                 self.accept()
             elif not client.online:
-                QMessageBox.critical(self, "连接失败",
-                    "无法连接到后端服务。\n\n请确认：\n"
-                    "1. 后端已启动 (java -jar ...)\n"
-                    "2. 端口 8080 未被占用\n"
-                    "3. API 地址正确: localhost:8080")
-                self._status_label.setText("")
-                self.login_btn.setEnabled(True)
+                self._login_error.setText("无法连接到服务器 (localhost:8080)")
             else:
-                QMessageBox.warning(self, "登录失败", "用户名或密码错误")
-                self._status_label.setText("")
-                self.login_btn.setEnabled(True)
+                self._login_error.setText("用户名或密码错误")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"登录异常: {e}")
-            self._status_label.setText("")
-            self.login_btn.setEnabled(True)
+            self._login_error.setText(f"异常: {e}")
+        finally:
+            self._login_btn.setEnabled(True)
 
-    def _on_signup(self):
-        QMessageBox.information(self, "提示", "注册功能即将开放", QMessageBox.Ok)
+    # ═══════════════════════════════════════════════════
+    #  注册
+    # ═══════════════════════════════════════════════════
+    def _on_register(self):
+        username = self._reg_user.text().strip()
+        password = self._reg_pass.text().strip()
+        nickname = self._reg_nick.text().strip()
+
+        # P2: 前端校验
+        if not username:
+            self._reg_hint.setText("用户名不能为空"); return
+        if len(username) < 3:
+            self._reg_hint.setText("用户名至少3位"); return
+        if not password:
+            self._reg_hint.setText("密码不能为空"); return
+        if len(password) < 4:
+            self._reg_hint.setText("密码至少4位"); return
+        if not any(c.isalpha() for c in username):
+            self._reg_hint.setText("用户名需包含字母"); return
+
+        # P7: 禁用按钮防重复提交
+        self._reg_hint.setText("正在注册...")
+        self._reg_btn.setEnabled(False)
+
+        try:
+            from api_client import APIClient
+            client = APIClient()
+
+            # P3: 网络检测
+            if not client.online:
+                self._reg_hint.setText("无法连接到服务器")
+                self._reg_btn.setEnabled(True); return
+
+            result = client.register(username, password, nickname)
+
+            if result is None:
+                # P1/P3: 未知错误
+                self._reg_hint.setText("注册失败，请检查网络或后端")
+                self._reg_btn.setEnabled(True); return
+
+            if isinstance(result, dict):
+                code = result.get("code", 500)
+                if code == 200:
+                    # P4/P5: 成功 — token/role 已由 register() 设置
+                    self.api_client = client
+                    self.username = client.username
+                    self.role = client.role or "DEVELOPER"
+                    self.accept()
+                    return
+                elif code == 400:
+                    self._reg_hint.setText(result.get("message", "账号已存在"))
+                elif code == 401:
+                    self._reg_hint.setText("该用户名已被占用")
+                else:
+                    msg = result.get("message", f"服务器错误 ({code})")
+                    self._reg_hint.setText(msg)
+            else:
+                self._reg_hint.setText("注册失败，响应格式异常")
+        except Exception as e:
+            self._reg_hint.setText(f"异常: {e}")
+        finally:
+            self._reg_btn.setEnabled(True)
