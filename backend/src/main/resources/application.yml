@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: standupsync-backend
+  datasource:
+    url: jdbc:mysql://localhost:3306/standupsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+jwt:
+  secret: standupsync-jwt-secret-key-2026-very-long-secure
+  expiration: 86400000
+
+logging:
+  level:
+    com.standupsync: DEBUG

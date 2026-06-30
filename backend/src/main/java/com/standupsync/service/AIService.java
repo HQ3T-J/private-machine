@@ -1,0 +1,402 @@
+package com.standupsync.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.standupsync.dto.AnalysisResult;
+import com.standupsync.model.MeetingSpeech;
+import com.standupsync.model.User.AIConfig;
+import okhttp3.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * AI analysis service for standup meetings.
+ *
+ * <h3>Three-step analysis pipeline</h3>
+ * <ol>
+ *   <li><b>Speaker identification</b> — detect who said what from raw chat log</li>
+ *   <li><b>Per-person structured summary</b> — summarise each speaker's update</li>
+ *   <li><b>Aggregate + ActionItem extraction</b> — produce meeting summary and action items</li>
+ * </ol>
+ */
+@Service
+public class AIService {
+
+    private static final Logger log = LoggerFactory.getLogger(AIService.class);
+
+    /** OpenAI-compatible chat completions endpoint suffix. */
+    private static final String CHAT_PATH = "/v1/chat/completions";
+
+    /** Default API base URLs keyed by provider. */
+    private static final Map<String, String> BASE_URL_MAP = Map.of(
+        "openai",  "https://api.openai.com",
+        "doubao",  "https://ark.cn-beijing.volces.com/api/v3",
+        "tongyi",  "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    );
+
+    private final OkHttpClient httpClient;
+    private final ObjectMapper objectMapper;
+
+    public AIService(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        this.httpClient = new OkHttpClient.Builder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .readTimeout(Duration.ofSeconds(30))
+            .writeTimeout(Duration.ofSeconds(30))
+            .callTimeout(Duration.ofSeconds(30))
+            .retryOnConnectionFailure(true)
+            .build();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //  Public API
+    // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Run the three-step AI analysis pipeline on meeting speeches.
+     *
+     * @param speeches ordered list of meeting speeches (raw text)
+     * @param aiConfig the AI provider + credentials config for the team owner
+     * @return structured {@link AnalysisResult} with speaker map, summaries, and action items
+     */
+    public AnalysisResult analyzeMeeting(List<MeetingSpeech> speeches, AIConfig aiConfig)
+            throws IOException {
+
+        if (speeches == null || speeches.isEmpty()) {
+            throw new IllegalArgumentException("No speeches provided for analysis");
+        }
+        if (aiConfig == null) {
+            throw new IllegalArgumentException("AI config is required");
+        }
+
+        // Build a single chat-log string from all speeches
+        StringBuilder chatLogBuilder = new StringBuilder();
+        for (int i = 0; i < speeches.size(); i++) {
+            MeetingSpeech s = speeches.get(i);
+            String label = s.getSpeaker() != null && s.getSpeaker().getDisplayName() != null
+                ? s.getSpeaker().getDisplayName()
+                : "Speaker" + (i + 1);
+            chatLogBuilder.append(label).append(": ").append(s.getRawText()).append("\n\n");
+        }
+        String chatLog = chatLogBuilder.toString().trim();
+
+        // ── Step 1: Speaker identification ─────────────────────────
+        String speakersJson = callLLM(aiConfig, buildSpeakerIdentificationPrompt(chatLog));
+        Map<String, String> speakerMap = parseSpeakerMap(speakersJson);
+
+        // ── Step 2: Per-person structured summary ──────────────────
+        Map<String, String> personSummaries = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : speakerMap.entrySet()) {
+            String speakerLabel = entry.getKey();
+            String speechText = extractSpeakerText(chatLog, speakerLabel);
+            if (speechText != null && !speechText.isBlank()) {
+                String summary = callLLM(aiConfig, buildPersonSummaryPrompt(speakerLabel, speechText));
+                personSummaries.put(speakerLabel, summary);
+            }
+        }
+
+        // ── Step 3: Aggregate + ActionItem extraction ──────────────
+        String aggregateResponse = callLLM(aiConfig, buildAggregatePrompt(chatLog, personSummaries));
+        String meetingSummary = extractField(aggregateResponse, "meeting_summary", aggregateResponse);
+        String actionItemsJson = extractField(aggregateResponse, "action_items", "[]");
+
+        return new AnalysisResult(speakerMap, personSummaries, meetingSummary, actionItemsJson);
+    }
+
+    /**
+     * Call an OpenAI-compatible LLM API.
+     *
+     * @param aiConfig  provider config (provider, model, apiKey, baseUrl)
+     * @param systemPrompt  the system-message content
+     * @param userPrompt    the user-message content
+     * @return the model's text response (content of first choice)
+     */
+    public String callLLM(AIConfig aiConfig, String systemPrompt, String userPrompt) throws IOException {
+        List<Map<String, String>> messages = List.of(
+            Map.of("role", "system", "content", systemPrompt),
+            Map.of("role", "user",   "content", userPrompt)
+        );
+        return callLLM(aiConfig, messages);
+    }
+
+    /**
+     * Call the LLM with an already-constructed messages list.
+     */
+    public String callLLM(AIConfig aiConfig, List<Map<String, String>> messages) throws IOException {
+        String provider = aiConfig.getProvider() != null ? aiConfig.getProvider().toLowerCase() : "openai";
+        String model = aiConfig.getModel() != null ? aiConfig.getModel() : "gpt-4o";
+        String apiKey = aiConfig.getApiKey();
+
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalArgumentException("API key is required for provider: " + provider);
+        }
+
+        // Resolve base URL: explicit config → provider map → default openai
+        String baseUrl = aiConfig.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = BASE_URL_MAP.getOrDefault(provider, BASE_URL_MAP.get("openai"));
+        }
+        // Strip trailing slash before appending path
+        baseUrl = baseUrl.replaceAll("/+$", "");
+        String endpoint = baseUrl + CHAT_PATH;
+
+        // Build request body
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("messages", messages);
+        body.put("temperature", aiConfig.getTemperature() != null ? aiConfig.getTemperature() : 0.7);
+        body.put("max_tokens", aiConfig.getMaxTokens() != null ? aiConfig.getMaxTokens() : 4096);
+
+        String jsonBody;
+        try {
+            jsonBody = objectMapper.writeValueAsString(body);
+        } catch (JsonProcessingException e) {
+            throw new IOException("Failed to serialize LLM request body", e);
+        }
+
+        Request request = new Request.Builder()
+            .url(endpoint)
+            .header("Authorization", "Bearer " + apiKey)
+            .header("Content-Type", "application/json")
+            .post(RequestBody.create(jsonBody, MediaType.parse("application/json")))
+            .build();
+
+        // Execute with 1 retry
+        IOException lastException = null;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                log.debug("LLM call attempt {} to {} with model {}", attempt + 1, endpoint, model);
+                try (Response response = httpClient.newCall(request).execute()) {
+                    String respBody = response.body() != null ? response.body().string() : "";
+                    if (!response.isSuccessful()) {
+                        String errorMsg = String.format("LLM API returned %d: %s",
+                            response.code(), respBody.length() > 500 ? respBody.substring(0, 500) : respBody);
+                        throw new IOException(errorMsg);
+                    }
+                    return extractContent(respBody);
+                }
+            } catch (IOException e) {
+                lastException = e;
+                log.warn("LLM call attempt {} failed: {}", attempt + 1, e.getMessage());
+                if (attempt == 0) {
+                    // Brief backoff before retry
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { /* continue */ }
+                }
+            }
+        }
+        throw new IOException("LLM call failed after 2 attempts", lastException);
+    }
+
+    /**
+     * Parse a raw meeting chat log into individual speech segments.
+     * Splits by newlines and groups by speaker prefix (e.g. "张三: ...").
+     *
+     * @param rawText the raw chat transcript
+     * @return ordered list of parsed speeches with speaker label and text
+     */
+    public List<Map<String, String>> parseChatLog(String rawText) {
+        List<Map<String, String>> speeches = new ArrayList<>();
+        if (rawText == null || rawText.isBlank()) {
+            return speeches;
+        }
+
+        // Pattern: "Name: text" or "Name： text" (full-width colon)
+        Pattern linePattern = Pattern.compile("^(.+?)[：:](.+)");
+        Map<String, StringBuilder> buffer = new LinkedHashMap<>();
+        List<String> order = new ArrayList<>();
+
+        for (String line : rawText.split("\\R")) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+            Matcher m = linePattern.matcher(line);
+            if (m.find()) {
+                String speaker = m.group(1).trim();
+                String text = m.group(2).trim();
+                if (!buffer.containsKey(speaker)) {
+                    buffer.put(speaker, new StringBuilder());
+                    order.add(speaker);
+                }
+                buffer.get(speaker).append(text).append("\n");
+            } else if (!order.isEmpty()) {
+                // Continuation line — append to last speaker
+                String lastSpeaker = order.get(order.size() - 1);
+                buffer.get(lastSpeaker).append(line).append("\n");
+            }
+        }
+
+        for (String speaker : order) {
+            speeches.add(Map.of("speaker", speaker,
+                                "text", buffer.get(speaker).toString().trim()));
+        }
+        return speeches;
+    }
+
+    /**
+     * Extract JSON from raw LLM output that may be wrapped in markdown code fences
+     * or contain surrounding text.
+     *
+     * @param raw the raw LLM response text
+     * @return the extracted JSON string, or the original raw if no JSON block found
+     */
+    public String extractJson(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+
+        // Try to find JSON inside ```json fences first
+        Pattern fencePattern = Pattern.compile(
+            "```(?:json)?\\s*\\n?([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+        Matcher fm = fencePattern.matcher(raw);
+        if (fm.find()) {
+            return fm.group(1).trim();
+        }
+
+        // Try to find a JSON object { ... } in the text
+        Pattern jsonPattern = Pattern.compile("\\{[^{}]*(?:\\{[^{}]*}[^{}]*)*}", Pattern.DOTALL);
+        Matcher jm = jsonPattern.matcher(raw);
+        if (jm.find()) {
+            return jm.group().trim();
+        }
+
+        // Fallback: return the raw text
+        return raw.trim();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    //  Internal helpers
+    // ─────────────────────────────────────────────────────────────────
+
+    /** Convenience: call LLM with a single user prompt (system prompt built-in). */
+    private String callLLM(AIConfig aiConfig, String userPrompt) throws IOException {
+        return callLLM(aiConfig,
+            "You are a helpful assistant. Respond with valid JSON only, no markdown fences or extra text.",
+            userPrompt);
+    }
+
+    /** Extract "content" field from OpenAI-style API response. */
+    private String extractContent(String respBody) throws IOException {
+        try {
+            JsonNode root = objectMapper.readTree(respBody);
+            JsonNode choices = root.get("choices");
+            if (choices == null || !choices.isArray() || choices.isEmpty()) {
+                throw new IOException("No choices in LLM response: " + truncate(respBody));
+            }
+            JsonNode message = choices.get(0).get("message");
+            if (message == null) {
+                throw new IOException("No message in first choice");
+            }
+            JsonNode content = message.get("content");
+            if (content == null) {
+                throw new IOException("No content in message");
+            }
+            return content.asText().trim();
+        } catch (JsonProcessingException e) {
+            throw new IOException("Failed to parse LLM response JSON: " + truncate(respBody), e);
+        }
+    }
+
+    // ── Prompt builders ──────────────────────────────────────────────
+
+    private String buildSpeakerIdentificationPrompt(String chatLog) {
+        return """
+            Below is a chat log from a team standup meeting. Each line starts with a speaker label (e.g. "Alice: ...").
+            Your task is to identify the unique speakers and return a JSON object mapping each label to the person's name.
+
+            Chat log:
+            %s
+
+            Respond with ONLY a JSON object like:
+            {"label1": "Full Name", "label2": "Full Name"}
+            """.formatted(chatLog);
+    }
+
+    private String buildPersonSummaryPrompt(String speaker, String speechText) {
+        return """
+            Summarise the following standup update from %s into a structured format.
+            Include these sections if present:
+            - What was accomplished since last standup
+            - What will be worked on next
+            - Any blockers or challenges
+
+            Update:
+            %s
+
+            Respond with a concise plain-text summary, no JSON needed.
+            """.formatted(speaker, speechText);
+    }
+
+    private String buildAggregatePrompt(String chatLog, Map<String, String> personSummaries) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> e : personSummaries.entrySet()) {
+            sb.append("## ").append(e.getKey()).append("\n").append(e.getValue()).append("\n\n");
+        }
+
+        return """
+            You are analysing a team standup meeting. Below is the raw chat log followed by per-person summaries.
+            Produce a JSON object with two fields:
+            1. "meeting_summary": a 2-3 paragraph overall meeting summary.
+            2. "action_items": a JSON array of action items, each with fields: "content", "assignee", "priority" (HIGH/MEDIUM/LOW).
+
+            Raw chat log:
+            %s
+
+            Per-person summaries:
+            %s
+
+            Respond with ONLY valid JSON:
+            {"meeting_summary": "...", "action_items": [{"content": "...", "assignee": "Name", "priority": "HIGH"}, ...]}
+            """.formatted(chatLog, sb.toString().trim());
+    }
+
+    // ── Response parsers ─────────────────────────────────────────────
+
+    private Map<String, String> parseSpeakerMap(String llmResponse) {
+        String json = extractJson(llmResponse);
+        Map<String, String> result = new LinkedHashMap<>();
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            root.fields().forEachRemaining(f -> result.put(f.getKey(), f.getValue().asText()));
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse speaker map JSON, using raw response: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    /** Extract a named field from a JSON object string. */
+    private String extractField(String json, String field, String fallback) {
+        String clean = extractJson(json);
+        try {
+            JsonNode node = objectMapper.readTree(clean);
+            JsonNode fieldNode = node.get(field);
+            if (fieldNode != null) {
+                return fieldNode.isTextual() ? fieldNode.asText() : fieldNode.toString();
+            }
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to extract field '{}' from JSON", field);
+        }
+        return fallback;
+    }
+
+    /** Extract the text spoken by a particular speaker label from the chat log. */
+    private String extractSpeakerText(String chatLog, String speakerLabel) {
+        Pattern p = Pattern.compile(
+            Pattern.quote(speakerLabel) + "\\s*[：:]\\s*(.+?)(?=(?:\\n\\s*\\n|\\n[A-Za-z\\u4e00-\\u9fff]+[：:]|$))",
+            Pattern.DOTALL);
+        Matcher m = p.matcher(chatLog);
+        if (m.find()) {
+            return m.group(1).trim();
+        }
+        return null;
+    }
+
+    private static String truncate(String s) {
+        return s.length() > 300 ? s.substring(0, 300) + "..." : s;
+    }
+}
