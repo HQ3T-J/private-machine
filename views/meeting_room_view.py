@@ -364,13 +364,22 @@ class MeetingRoomView(QWidget):
         )
 
         if resp and resp.get("code") == 200:
-            parsed = resp.get("data", {}).get("parsed", {})
+            data = resp.get("data", {})
+            parsed = data.get("parsed", {})
+            ai_mode = data.get("aiMode", "rule")
             y, t, b = parsed.get("yesterday", ""), parsed.get("today", ""), parsed.get("blockers", "")
             preview = []
             if y: preview.append(f"昨天: {y[:40]}")
             if t: preview.append(f"今天: {t[:40]}")
             if b: preview.append(f"阻碍: {b[:40]}")
-            self._ai_preview.setText("🤖 AI 解析: " + " | ".join(preview))
+            icon = "🤖" if ai_mode == "llm" else "🔍"
+            mode_text = "DeepSeek AI" if ai_mode == "llm" else "智能解析"
+            self._ai_preview.setText(f"{icon} {mode_text}: " + " | ".join(preview))
+            self._ai_preview.setStyleSheet(
+                "font-size: 11px; color: #52C41A; padding: 4px 8px; background:#0D1117; border-radius:4px;"
+                if ai_mode == "llm" else
+                "font-size: 11px; color: #F5A623; padding: 4px 8px; background:#0D1117; border-radius:4px;"
+            )
             self._ai_preview.setVisible(True)
 
             self._text_edit.clear()

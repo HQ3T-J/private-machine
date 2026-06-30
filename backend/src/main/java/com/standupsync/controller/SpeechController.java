@@ -75,7 +75,9 @@ public class SpeechController {
         String inputMethod = body.getOrDefault("inputMethod", "TEXT");
 
         // AI 解析自由文本（优先LLM，降级规则引擎）
+        boolean usedAI = aiConfig.isEnabled();
         Map<String, String> parsed = aiService.parseFreeText(text, aiConfig);
+        String aiMode = usedAI ? "llm" : "rule";
 
         MeetingSpeech speech = new MeetingSpeech();
         speech.setMeeting(meeting);
@@ -92,6 +94,7 @@ public class SpeechController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("speech", speech);
         result.put("parsed", parsed);
+        result.put("aiMode", aiMode);
         return ApiResponse.success("发言已提交并解析", result);
     }
 
