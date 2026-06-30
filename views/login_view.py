@@ -200,28 +200,24 @@ class LoginWindow(QDialog):
             result = client.register(username, password, nickname)
 
             if result is None:
-                # P1/P3: 未知错误
-                self._reg_hint.setText("注册失败，请检查网络或后端")
+                self._reg_hint.setText("注册失败，无法连接服务器")
                 self._reg_btn.setEnabled(True); return
 
-            if isinstance(result, dict):
-                code = result.get("code", 500)
-                if code == 200:
-                    # P4/P5: 成功 — token/role 已由 register() 设置
-                    self.api_client = client
-                    self.username = client.username
-                    self.role = client.role or "DEVELOPER"
-                    self.accept()
-                    return
-                elif code == 400:
-                    self._reg_hint.setText(result.get("message", "账号已存在"))
-                elif code == 401:
-                    self._reg_hint.setText("该用户名已被占用")
-                else:
-                    msg = result.get("message", f"服务器错误 ({code})")
-                    self._reg_hint.setText(msg)
+            # 成功: register() 返回 data dict (无code)，已设 client.token
+            if client.token:
+                self.api_client = client
+                self.username = client.username
+                self.role = client.role or "DEVELOPER"
+                self.accept()
+                return
+
+            # 失败: register() 返回完整响应 (含code)
+            code = result.get("code", 500)
+            if code == 400:
+                self._reg_hint.setText(result.get("message", "账号已存在"))
             else:
-                self._reg_hint.setText("注册失败，响应格式异常")
+                msg = result.get("message", f"服务器错误 ({code})")
+                self._reg_hint.setText(msg)
         except Exception as e:
             self._reg_hint.setText(f"异常: {e}")
         finally:

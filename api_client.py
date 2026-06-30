@@ -86,14 +86,17 @@ class APIClient:
         resp = self._post("/api/auth/register", {
             "username": username, "password": password, "displayName": display_name or username
         })
-        if resp and resp.get("code") == 200:
+        if not resp:
+            return None  # 网络不通
+        if resp.get("code") == 200:
             data = resp["data"]
             self.token = data.get("token")
             self.user_id = data.get("userId")
             self.role = data.get("role")
             self.username = username
             return data
-        return None
+        # 返回完整响应给调用方显示错误信息
+        return resp
 
     # ═══════════════════════════════════════════════
     #  团队
