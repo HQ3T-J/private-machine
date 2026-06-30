@@ -19,22 +19,10 @@ class LoginWindow(QDialog):
         self.setWindowTitle("StandupSync - 登录")
         self.setFixedSize(400, 400)
         self.setStyleSheet("""
-            QDialog {
-                background-color: #1A1A2E;
-            }
-            QLabel {
-                color: #E0E0E0;
-            }
             QLineEdit {
-                background-color: #0F3460;
-                color: #E0E0E0;
-                border: 1px solid #16213E;
                 border-radius: 6px;
                 padding: 10px 12px;
                 font-size: 14px;
-            }
-            QLineEdit:focus {
-                border-color: #4A90D9;
             }
             QPushButton#login_btn {
                 background-color: #4A90D9;
@@ -65,7 +53,6 @@ class LoginWindow(QDialog):
         layout.setContentsMargins(40, 30, 40, 30)
         layout.setSpacing(15)
 
-        # ---- 顶部图标 + 标题 ----
         icon_label = QLabel("📋")
         icon_label.setAlignment(Qt.AlignCenter)
         icon_label.setStyleSheet("font-size: 48px;")
@@ -78,24 +65,20 @@ class LoginWindow(QDialog):
 
         layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Fixed))
 
-        # ---- 卡片容器 ----
         card_layout = QVBoxLayout()
         card_layout.setSpacing(12)
 
-        # 用户名
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("用户名")
         self.username_input.setMinimumHeight(40)
         card_layout.addWidget(self.username_input)
 
-        # 密码
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_input.setPlaceholderText("密码")
         self.password_input.setMinimumHeight(40)
         card_layout.addWidget(self.password_input)
 
-        # 登录按钮
         self.login_btn = QPushButton("登  录")
         self.login_btn.setObjectName("login_btn")
         self.login_btn.setMinimumHeight(40)
@@ -104,10 +87,13 @@ class LoginWindow(QDialog):
         card_layout.addWidget(self.login_btn)
 
         layout.addLayout(card_layout)
-
         layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # ---- 底部注册链接 ----
+        self._status_label = QLabel("")
+        self._status_label.setAlignment(Qt.AlignCenter)
+        self._status_label.setStyleSheet("color: #8E8E9E; font-size: 12px;")
+        layout.addWidget(self._status_label)
+
         signup_label = QLabel('<a href="#" style="color: #4A90D9; text-decoration: none;">还没有账号？注册</a>')
         signup_label.setObjectName("signup_link")
         signup_label.setAlignment(Qt.AlignCenter)
@@ -116,19 +102,40 @@ class LoginWindow(QDialog):
         layout.addWidget(signup_label)
 
     def _on_login(self):
-        """登录按钮点击"""
-        self.username = self.username_input.text().strip() or "张三"
-        # 演示用，根据用户名映射角色
-        role_map = {"admin": "tech_lead", "sm": "scrum_master",
-                     "dev": "developer", "obs": "observer"}
-        self.role = role_map.get(self.username.lower(), "tech_lead")
-        self.accept()
+        username = self.username_input.text().strip()
+        password = self.password_input.text().strip()
+        if not username or not password:
+            QMessageBox.warning(self, "提示", "请输入用户名和密码")
+            return
+
+        self._status_label.setText("正在连接服务器...")
+        self.login_btn.setEnabled(False)
+
+        try:
+            from api_client import APIClient
+            client = APIClient()
+            result = client.login(username, password)
+            if result:
+                self.api_client = client
+                self.username = client.username
+                self.role = client.role or "DEVELOPER"
+                self.accept()
+            elif not client.online:
+                QMessageBox.critical(self, "连接失败",
+                    "无法连接到后端服务。\n\n请确认：\n"
+                    "1. 后端已启动 (java -jar ...)\n"
+                    "2. 端口 8080 未被占用\n"
+                    "3. API 地址正确: localhost:8080")
+                self._status_label.setText("")
+                self.login_btn.setEnabled(True)
+            else:
+                QMessageBox.warning(self, "登录失败", "用户名或密码错误")
+                self._status_label.setText("")
+                self.login_btn.setEnabled(True)
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"登录异常: {e}")
+            self._status_label.setText("")
+            self.login_btn.setEnabled(True)
 
     def _on_signup(self):
-        """注册链接点击"""
-        QMessageBox.information(
-            self,
-            "提示",
-            "注册功能即将开放",
-            QMessageBox.Ok
-        )
+        QMessageBox.information(self, "提示", "注册功能即将开放", QMessageBox.Ok)

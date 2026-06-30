@@ -28,9 +28,10 @@ PRIORITY_COLORS = {
 }
 
 STATUS_LABELS = {
-    "pending": "待处理",
-    "in_progress": "进行中",
-    "completed": "已完成",
+    "pending": "待处理", "PENDING": "待处理",
+    "in_progress": "进行中", "IN_PROGRESS": "进行中",
+    "completed": "已完成", "DONE": "已完成",
+    "cancelled": "已取消", "CANCELLED": "已取消",
 }
 
 
@@ -66,14 +67,10 @@ class TodoView(QWidget):
         tab_layout.setSpacing(4)
 
         self._tabs = {}
-        tab_items = [
-            ("all", "全部", 12),
-            ("pending", "待处理", 4),
-            ("in_progress", "进行中", 3),
-            ("completed", "已完成", 5),
-        ]
-        for key, label, count in tab_items:
-            btn = QPushButton(f"{label} ({count})")
+        self._tab_keys = ["all", "pending", "in_progress", "completed"]
+        self._tab_labels = {"all": "全部", "pending": "待处理", "in_progress": "进行中", "completed": "已完成"}
+        for key in self._tab_keys:
+            btn = QPushButton(self._tab_labels[key])
             btn.setCheckable(True)
             btn.setObjectName(f"tab_{key}")
             btn.setCursor(Qt.PointingHandCursor)
@@ -154,16 +151,15 @@ class TodoView(QWidget):
         self._detail_fields = {}
         field_configs = [
             ("priority", "优先级"),
-            ("source", "来源"),
+            ("status", "状态"),
             ("assignee", "责任人"),
             ("due", "截止日期"),
-            ("status", "状态"),
         ]
         for key, label_text in field_configs:
             row = QHBoxLayout()
             lbl = QLabel(f"{label_text}：")
             lbl.setFixedWidth(70)
-            lbl.setStyleSheet("color: #8E8E9E; font-size: 13px;")
+            lbl.setStyleSheet("font-size: 13px;")
             val = QLabel("—")
             val.setWordWrap(True)
             val.setStyleSheet("font-size: 13px;")
@@ -210,26 +206,19 @@ class TodoView(QWidget):
         if self.api_client:
             self._todos = self.api_client.get_todos(self._current_status)
         else:
-            self._todos = self._get_stub_todos(self._current_status)
+            self._todos = []
         self._populate_table()
+        self._update_tab_counts()
 
-    def _get_stub_todos(self, status):
-        """独立实例化时的占位数据。"""
-        data = [
-            {"id": "1", "content": "修复登录页面 Bug", "priority": "high", "status": "pending",
-             "assignee": "张三", "due": "明天", "source": "06-25 站会"},
-            {"id": "2", "content": "重构用户模块接口", "priority": "medium", "status": "in_progress",
-             "assignee": "李四", "due": "本周五", "source": "06-24 站会"},
-            {"id": "3", "content": "编写单元测试", "priority": "low", "status": "completed",
-             "assignee": "王五", "due": "已完成", "source": "06-23 站会"},
-            {"id": "4", "content": "更新 API 文档", "priority": "medium", "status": "pending",
-             "assignee": "赵六", "due": "下周一", "source": "06-25 站会"},
-            {"id": "5", "content": "性能优化 - 首页加载", "priority": "high", "status": "in_progress",
-             "assignee": "张三", "due": "今天", "source": "06-25 站会"},
-        ]
-        if status:
-            data = [t for t in data if t["status"] == status]
-        return data
+    def _update_tab_counts(self):
+        """根据实际数据更新 Tab 计数"""
+        counts = {"all": len(self._todos), "pending": 0, "in_progress": 0, "completed": 0}
+        for t in self._todos:
+            s = t.get("status", "")
+            if s in counts: counts[s] += 1
+        for key in self._tab_keys:
+            if key in self._tabs:
+                self._tabs[key].setText(f"{self._tab_labels[key]} ({counts.get(key, 0)})")
 
     # ── 表格填充 ──
     def _populate_table(self):
@@ -256,7 +245,8 @@ class TodoView(QWidget):
             self._table.setItem(row, 2, status_item)
 
             # 截止日期
-            due_item = QTableWidgetItem(todo["due"])
+            due_str = str(todo.get("dueDate") or todo.get("due", "—"))
+            due_item = QTableWidgetItem(due_str[:10] if due_str != "—" else "—")
             due_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(row, 3, due_item)
 
@@ -283,15 +273,21 @@ class TodoView(QWidget):
         self._current_row = row
         if 0 <= row < len(self._todos):
             todo = self._todos[row]
-            self._detail_title.setText(todo["content"])
-            self._detail_fields["priority"].setText(todo["priority"])
+            self._detail_title.setText(todo.get("content", ""))
+            self._detail_fields["priority"].setText(todo.get("priority", ""))
             pip = self._detail_fields["priority"]
-            pc = PRIORITY_COLORS.get(todo["priority"], "#8E8E9E")
+            pc = PRIORITY_COLORS.get(todo.get("priority", ""), "#8E8E9E")
             pip.setStyleSheet(f"color: {pc}; font-size: 13px; font-weight: bold;")
-            self._detail_fields["source"].setText(todo.get("source", "—"))
-            self._detail_fields["assignee"].setText(todo.get("assignee", "—"))
-            self._detail_fields["due"].setText(todo.get("due", "—"))
-            st = STATUS_LABELS.get(todo["status"], todo["status"])
+            # 责任人：从嵌套 assignee 对象或 assigneeName 字段取
+            assignee = todo.get("assignee", {}) or {}
+            if isinstance(assignee, dict):
+                name = assignee.get("displayName") or assignee.get("username", "—")
+            else:
+                name = todo.get("assigneeName", str(assignee) if assignee else "—")
+            self._detail_fields["assignee"].setText(name)
+            due = todo.get("dueDate") or todo.get("due", "—")
+            self._detail_fields["due"].setText(str(due)[:10] if due != "—" else "—")
+            st = STATUS_LABELS.get(todo.get("status", ""), str(todo.get("status", "")))
             self._detail_fields["status"].setText(st)
             self._update_detail_panel_buttons(True)
 
@@ -300,9 +296,12 @@ class TodoView(QWidget):
         if self._current_row < 0 or self._current_row >= len(self._todos):
             return
         tid = self._todos[self._current_row]["id"]
+        if self.api_client:
+            self.api_client.update_todo(str(tid), {"status": new_status})
         self._todos[self._current_row]["status"] = new_status
         self._populate_table()
-        self.status_changed.emit(tid, new_status)
+        self._update_tab_counts()
+        self.status_changed.emit(str(tid), new_status)
 
     # ── 右键菜单 ──
     def _on_context_menu(self, pos):
@@ -335,76 +334,59 @@ class TodoView(QWidget):
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _set_todo_status(self, tid, status):
+        if self.api_client:
+            self.api_client.update_todo(str(tid), {"status": status})
         for t in self._todos:
-            if t["id"] == tid:
+            if str(t.get("id")) == str(tid):
                 t["status"] = status
                 break
         self._populate_table()
+        self._update_tab_counts()
 
     def _delete_todo(self, row):
         if 0 <= row < len(self._todos):
+            tid = self._todos[row].get("id")
+            if self.api_client and tid:
+                self.api_client.delete_todo(str(tid))
             del self._todos[row]
             self._populate_table()
+            self._update_tab_counts()
 
     # ── 样式 ──
     def _apply_style(self):
         self.setStyleSheet("""
             #todoTabBar {
-                background-color: #16213E;
-                border-bottom: 1px solid #2A2A4A;
+                border-bottom: 1px solid transparent;
             }
             #todoTabBar QPushButton {
                 background: transparent;
-                color: #8E8E9E;
                 border: none;
                 border-radius: 6px;
                 padding: 6px 14px;
                 font-size: 13px;
             }
-            #todoTabBar QPushButton:hover {
-                background-color: #1A1A3E;
-                color: #E0E0E0;
-            }
             #todoTabBar QPushButton:checked {
-                background-color: #0F3460;
                 color: #4A9ED9;
                 font-weight: bold;
             }
             #todoSeparator {
-                background-color: #2A2A4A;
                 max-height: 1px;
             }
             QTableWidget {
-                background-color: #1A1A2E;
-                alternate-background-color: #1E1E36;
-                color: #E0E0E0;
                 border: none;
-                gridline-color: #2A2A4A;
                 font-size: 13px;
             }
             QTableWidget::item {
                 padding: 8px 6px;
-                border-bottom: 1px solid #2A2A4A;
-            }
-            QTableWidget::item:selected {
-                background-color: #0F3460;
-                color: #FFFFFF;
             }
             QHeaderView::section {
-                background-color: #16213E;
-                color: #8E8E9E;
                 padding: 8px 6px;
                 border: none;
-                border-bottom: 1px solid #2A2A4A;
                 font-size: 12px;
                 font-weight: bold;
             }
             #todoDetailPanel {
-                background-color: #16213E;
-                border-left: 1px solid #2A2A4A;
-            }
-            #detailTitle {
-                color: #E0E0E0;
+                border-left: 1px solid transparent;
             }
             #btnMarkComplete {
                 background-color: #52C41A;
@@ -418,10 +400,6 @@ class TodoView(QWidget):
             #btnMarkComplete:hover {
                 background-color: #45A818;
             }
-            #btnMarkComplete:disabled {
-                background-color: #3A3A5A;
-                color: #6E6E8E;
-            }
             #btnMarkProgress {
                 background-color: #F5A623;
                 color: #FFFFFF;
@@ -434,10 +412,6 @@ class TodoView(QWidget):
             #btnMarkProgress:hover {
                 background-color: #D4901E;
             }
-            #btnMarkProgress:disabled {
-                background-color: #3A3A5A;
-                color: #6E6E8E;
-            }
             #btnTransfer {
                 background-color: #4A9ED9;
                 color: #FFFFFF;
@@ -449,21 +423,5 @@ class TodoView(QWidget):
             }
             #btnTransfer:hover {
                 background-color: #3A8EC9;
-            }
-            #btnTransfer:disabled {
-                background-color: #3A3A5A;
-                color: #6E6E8E;
-            }
-            QMenu {
-                background-color: #1A1A2E;
-                color: #E0E0E0;
-                border: 1px solid #2A2A4A;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 24px;
-            }
-            QMenu::item:selected {
-                background-color: #0F3460;
             }
         """)

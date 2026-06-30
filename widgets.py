@@ -33,11 +33,9 @@ class StatCard(QFrame):
         self.setObjectName("StatCard")
         self.setMinimumSize(160, 90)
 
-        # 卡片基础样式
+        # 卡片基础样式（颜色由全局主题控制）
         self.setStyleSheet("""
             QFrame#StatCard {
-                background-color: #16213E;
-                border: 1px solid #2A2A4E;
                 border-radius: 10px;
             }
         """)
@@ -49,7 +47,7 @@ class StatCard(QFrame):
 
         # 标题
         self._title_label = QLabel(title)
-        self._title_label.setStyleSheet("color: #8E8E9E; font-size: 11px;")
+        self._title_label.setStyleSheet("font-size: 11px;")
         layout.addWidget(self._title_label)
 
         # 数值行（数值 + 趋势）
@@ -58,7 +56,6 @@ class StatCard(QFrame):
 
         self._value_label = QLabel(value)
         self._value_label.setFont(QFont("Microsoft YaHei", 24, QFont.Weight.Bold))
-        self._value_label.setStyleSheet("color: #FFFFFF;")
         value_row.addWidget(self._value_label)
 
         self._trend_label = QLabel(trend)
@@ -140,13 +137,13 @@ class EmptyState(QWidget):
         # 标题
         self._title_label = QLabel(title)
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_label.setStyleSheet("color: #8E8E9E; font-size: 15px; font-weight: bold;")
+        self._title_label.setStyleSheet("font-size: 15px; font-weight: bold;")
         layout.addWidget(self._title_label)
 
         # 副标题
         self._subtitle_label = QLabel(subtitle)
         self._subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._subtitle_label.setStyleSheet("color: #5A5A6E; font-size: 12px;")
+        self._subtitle_label.setStyleSheet("font-size: 12px;")
         self._subtitle_label.setWordWrap(True)
         layout.addWidget(self._subtitle_label)
 
@@ -182,10 +179,10 @@ class EmptyState(QWidget):
 # ============================================================================
 
 _TOAST_COLORS = {
-    "info":    ("#16213E", "#4A9ED9", "ℹ"),
-    "success": ("#16213E", "#52C41A", "✓"),
-    "warning": ("#16213E", "#F5A623", "⚠"),
-    "error":   ("#16213E", "#E74C3C", "✗"),
+    "info":    ("#1A1A2E", "#4A9ED9", "ℹ"),
+    "success": ("#1A1A2E", "#52C41A", "✓"),
+    "warning": ("#1A1A2E", "#F5A623", "⚠"),
+    "error":   ("#1A1A2E", "#E74C3C", "✗"),
 }
 
 
@@ -221,7 +218,6 @@ class Toast(QWidget):
         # 整体样式
         self.setStyleSheet(f"""
             QWidget#Toast {{
-                background-color: {bg};
                 border: 1px solid {accent};
                 border-left: 4px solid {accent};
                 border-radius: 8px;

@@ -75,65 +75,83 @@ PAGE_TODO = 1
 PAGE_DASHBOARD = 2
 PAGE_TEAM = 3
 PAGE_SETTINGS = 4
+PAGE_MEETING_ROOM = 5
 
 
-class SidebarButton(QPushButton):
-    """侧边栏导航按钮，带激活态指示条。"""
+class SidebarButton(QFrame):
+    """侧边栏导航按钮：图标 + 文字独立布局，视觉对齐，主题感知。"""
 
-    def __init__(self, text: str, page_index: int, parent=None):
-        super().__init__(text, parent)
+    clicked = Signal()
+
+    DARK_ACTIVE_BG = "#0F3460"
+    DARK_INACTIVE_TEXT = "#8E8E9E"
+    LIGHT_ACTIVE_BG = "#E6F7FF"
+    LIGHT_INACTIVE_TEXT = "#8C8C8C"
+    ACCENT = "#1890FF"
+
+    def __init__(self, icon: str, label: str, page_index: int, parent=None):
+        super().__init__(parent)
         self.page_index = page_index
         self._active = False
-        self.setFlat(True)
+        self._theme = "dark"
+        self.setFixedHeight(36)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedHeight(34)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._update_style()
-        self.clicked.connect(self._on_click)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(10)
+
+        self._icon_label = QLabel(icon)
+        self._icon_label.setFixedWidth(20)
+        self._icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self._icon_label)
+
+        self._text_label = QLabel(label)
+        layout.addWidget(self._text_label)
+        layout.addStretch()
+
+        self._apply_theme()
+
+    def mousePressEvent(self, event):
+        self.clicked.emit()
 
     @property
-    def active(self) -> bool:
+    def active(self):
         return self._active
 
     @active.setter
     def active(self, val: bool):
         self._active = val
-        self._update_style()
+        self._apply_theme()
 
-    def _on_click(self):
-        # 信号由父级 Sidebar 统一处理
-        pass
+    def set_theme(self, theme: str):
+        if theme == self._theme:
+            return
+        self._theme = theme
+        self._apply_theme()
 
-    def _update_style(self):
+    def _apply_theme(self):
+        is_dark = (self._theme == "dark")
+        accent = "#4A9ED9" if is_dark else self.ACCENT
         if self._active:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: #0F3460;
-                    color: #FFFFFF;
-                    border: none;
-                    border-left: 3px solid #4A9ED9;
-                    text-align: left;
-                    padding: 0px 16px;
-                    font-size: 13px;
-                    font-weight: bold;
-                }
-            """)
+            bg = self.DARK_ACTIVE_BG if is_dark else self.LIGHT_ACTIVE_BG
+            text_c = "#FFFFFF" if is_dark else "#1890FF"
+            self.setStyleSheet(
+                f"SidebarButton {{ background-color: {bg}; border-left: 3px solid {accent}; }}")
+            self._icon_label.setStyleSheet(
+                f"background: transparent; font-size: 14px; color: {text_c};")
+            self._text_label.setStyleSheet(
+                f"background: transparent; font-size: 13px; color: {text_c}; font-weight: bold;")
         else:
-            self.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    color: #8E8E9E;
-                    border: none;
-                    border-left: 3px solid transparent;
-                    text-align: left;
-                    padding: 0px 16px;
-                    font-size: 13px;
-                }
-                QPushButton:hover {
-                    background-color: #1A1A3E;
-                    color: #C0C0D0;
-                }
-            """)
+            text_c = self.DARK_INACTIVE_TEXT if is_dark else self.LIGHT_INACTIVE_TEXT
+            hover_bg = "#1A1A3E" if is_dark else "#E6F7FF"
+            self.setStyleSheet(
+                f"SidebarButton {{ background-color: transparent; border-left: 3px solid transparent; }}"
+                f"SidebarButton:hover {{ background-color: {hover_bg}; }}")
+            self._icon_label.setStyleSheet(
+                f"background: transparent; font-size: 14px; color: {text_c};")
+            self._text_label.setStyleSheet(
+                f"background: transparent; font-size: 13px; color: {text_c};")
 
 
 class Sidebar(QFrame):
@@ -141,7 +159,7 @@ class Sidebar(QFrame):
 
     navigated = Signal(int)  # page_index
 
-    def __init__(self, username: str = "张三", role: str = "Tech Lead", parent=None):
+    def __init__(self, username: str = "", role: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(200)
@@ -177,17 +195,17 @@ class Sidebar(QFrame):
         sep1.setStyleSheet("background-color: #2A2A4A; max-height: 1px; margin: 0 12px;")
         layout.addWidget(sep1)
 
-        # ── 导航按钮 ──
+        # ── 导航按钮（使用固定宽度图标区，确保文字对齐）──
         nav_items = [
-            ("☰  站会", PAGE_HOME),
-            ("☑  待办", PAGE_TODO),
-            ("▣  看板", PAGE_DASHBOARD),
-            ("👥  团队", PAGE_TEAM),
-            ("⚙  设置", PAGE_SETTINGS),
+            ("\u2630", "站会", PAGE_HOME),
+            ("\u2713", "待办", PAGE_TODO),
+            ("\u25A0", "看板", PAGE_DASHBOARD),
+            ("\u2659", "团队", PAGE_TEAM),
+            ("\u2699", "设置", PAGE_SETTINGS),
         ]
-        for text, idx in nav_items:
-            btn = SidebarButton(text, idx)
-            btn.clicked.connect(lambda checked, i=idx: self.set_active(i))
+        for icon, label, idx in nav_items:
+            btn = SidebarButton(icon, label, idx)
+            btn.clicked.connect(lambda checked=False, i=idx: self.set_active(i))
             self._buttons[idx] = btn
             layout.addWidget(btn)
 
@@ -292,22 +310,31 @@ class Sidebar(QFrame):
         self._apply_identity_rules()
 
     def set_notification(self, page_index: int, count: int):
-        """设置导航按钮角标（简单实现：追加计数到按钮文本）。"""
+        """设置导航按钮角标"""
         if page_index in self._buttons:
             btn = self._buttons[page_index]
-            # 提取原始文本（去掉已有的角标）
-            base_texts = {
-                PAGE_HOME: "☰  站会",
-                PAGE_TODO: "☑  待办",
-                PAGE_DASHBOARD: "▣  看板",
-                PAGE_TEAM: "👥  团队",
-                PAGE_SETTINGS: "⚙  设置",
-            }
-            base = base_texts.get(page_index, btn.text().split(" (")[0])
+            base = btn._text_label.text()
+            # Strip existing count
+            if " (" in base:
+                base = base.split(" (")[0]
             if count > 0:
-                btn.setText(f"{base} ({count})")
+                btn._text_label.setText(f"{base} ({count})")
             else:
-                btn.setText(base)
+                btn._text_label.setText(base)
+
+    def set_theme(self, theme: str):
+        """切换侧边栏主题（深色/浅色）"""
+        is_dark = (theme == "dark")
+        bg = "#1A1A2E" if is_dark else "#FFFFFF"
+        border = "#2A2A4A" if is_dark else "#E5E5E5"
+        sep = "#2A2A4A" if is_dark else "#E5E5E5"
+        logo_color = "#4A9ED9" if is_dark else "#1890FF"
+        name_color = "#E0E0E0" if is_dark else "#262626"
+        role_color = "#8E8E9E" if is_dark else "#8C8C8C"
+
+        self.setStyleSheet(f"#Sidebar {{ background-color: {bg}; border-right: 1px solid {border}; }}")
+        for btn in self._buttons.values():
+            btn.set_theme(theme)
 
 
 class MainWindow(QMainWindow):
@@ -320,7 +347,7 @@ class MainWindow(QMainWindow):
         sys.exit(app.exec())
     """
 
-    def __init__(self, username: str = "张三", role: str = "Tech Lead",
+    def __init__(self, username: str = "", role: str = "",
                  api_client=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("StandupSync")
@@ -380,8 +407,18 @@ class MainWindow(QMainWindow):
 
         # 4: 设置
         settings = SettingsView(api_client=self._api_client)
+        settings.theme_changed.connect(self._on_theme_changed)
         self._stack.addWidget(settings)
         self._pages[PAGE_SETTINGS] = settings
+
+        # 5: 站会进行中
+        meeting_room = MeetingRoomView(api_client=self._api_client)
+        meeting_room.navigate_back.connect(self._on_meeting_back)
+        self._stack.addWidget(meeting_room)
+        self._pages[PAGE_MEETING_ROOM] = meeting_room
+
+        # 首页 → 站会室 导航
+        home.navigate_to_meeting.connect(self._on_enter_meeting_room)
 
         main_layout.addWidget(self._stack, 1)
 
@@ -401,14 +438,35 @@ class MainWindow(QMainWindow):
 
     # ── 导航切换 ──
     def _on_navigate(self, page_index: int):
-        if page_index == self._current_page:
-            return
         self._current_page = page_index
         self._stack.setCurrentIndex(page_index)
-        # 激活页面
         page = self._pages.get(page_index)
         if page and hasattr(page, "activate"):
             page.activate()
+
+    def _on_theme_changed(self, theme: str):
+        """切换全局主题"""
+        from theme import DARK_STYLE, LIGHT_STYLE
+        style = LIGHT_STYLE if theme == "light" else DARK_STYLE
+        QApplication.instance().setStyleSheet(style)
+        self._sidebar.set_theme(theme)
+
+    def _on_enter_meeting_room(self, meeting_id, meeting_data=None):
+        """从首页进入站会室"""
+        room = self._pages.get(PAGE_MEETING_ROOM)
+        if room:
+            room.activate(meeting_id=meeting_id, meeting_data=meeting_data)
+        self._stack.setCurrentIndex(PAGE_MEETING_ROOM)
+        self._current_page = PAGE_MEETING_ROOM
+
+    def _on_meeting_back(self):
+        """从站会室返回首页"""
+        self._stack.setCurrentIndex(PAGE_HOME)
+        self._current_page = PAGE_HOME
+        self._sidebar.set_active(PAGE_HOME)
+        home = self._pages.get(PAGE_HOME)
+        if home and hasattr(home, "activate"):
+            home.activate()
 
     # ── 公开方法 ──
     def navigate_to(self, page_index: int):
@@ -441,6 +499,6 @@ if __name__ == "__main__":
     except ImportError:
         pass
 
-    window = MainWindow(username="张三", role="Tech Lead")
+    window = MainWindow(username="admin", role="Tech Lead")
     window.show()
     sys.exit(app.exec())

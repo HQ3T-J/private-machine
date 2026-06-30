@@ -19,9 +19,13 @@ def main():
     login = LoginWindow()
     if login.exec() == LoginWindow.Accepted:
         from app import MainWindow
-        username = login.username or "张三"
-        role = login.role or "tech_lead"
-        window = MainWindow(username=username, role=role)
+        username = login.username
+        role = login.role
+        if not username or not role:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "错误", "登录信息无效，请重试")
+            sys.exit(1)
+        window = MainWindow(username=username, role=role, api_client=login.api_client)
         window.show()
         sys.exit(app.exec())
 

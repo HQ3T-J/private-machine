@@ -3,66 +3,126 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
-    QSizePolicy, QSpacerItem
+    QSizePolicy, QSpacerItem, QMessageBox, QDialog,
+    QLineEdit, QFormLayout, QDialogButtonBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+
+
+class CreateMeetingDialog(QDialog):
+    """创建站会对话框"""
+
+    def __init__(self, api_client=None, team_id=None, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self.team_id = team_id
+        self.setWindowTitle("创建新站会")
+        self.setFixedSize(360, 200)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QFormLayout(self)
+        layout.setSpacing(12)
+
+        self._title_input = QLineEdit()
+        self._title_input.setPlaceholderText("例如: Sprint 12 每日站会")
+        self._title_input.setMinimumHeight(32)
+        layout.addRow("标题:", self._title_input)
+
+        self._sprint_input = QLineEdit()
+        self._sprint_input.setPlaceholderText("例如: 12")
+        self._sprint_input.setMinimumHeight(32)
+        layout.addRow("Sprint #:", self._sprint_input)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(self._on_create)
+        btn_box.rejected.connect(self.reject)
+        layout.addRow(btn_box)
+
+        self.setStyleSheet("""
+            QLineEdit { border-radius: 4px; padding: 6px 10px; font-size: 13px; }
+        """)
+
+    def _on_create(self):
+        title = self._title_input.text().strip() or "每日站会"
+        sprint = self._sprint_input.text().strip() or "1"
+        if self.api_client and self.team_id:
+            self.api_client.create_meeting(self.team_id, sprint, title)
+        self.accept()
 
 
 class HomeView(QWidget):
-    """站会首页"""
+    """站会首页 —— 对接后端真实数据"""
+
+    navigate_to_meeting = Signal(int, dict)  # meeting_id, meeting_data
+    meeting_created = Signal()
 
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
         self.title = "站会"
-        self.setStyleSheet(self._base_style())
+        self._meetings = []
+        self._teams = []
+        self._current_team_id = None
         self._setup_ui()
 
-    def _base_style(self):
-        return """
-            QWidget {
-                background-color: #1A1A2E;
-                color: #E0E0E0;
-            }
-            QLabel#page_title {
-                font-size: 20px;
-                font-weight: bold;
-                color: #FFFFFF;
-                padding-bottom: 8px;
-            }
-        """
-
     def activate(self):
-        """页面显示时调用"""
-        pass
+        self._load_data()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(16)
 
-        # ---- 页面标题 ----
+        # ---- 页面标题 + 操作按钮 ----
+        header_row = QHBoxLayout()
         title_label = QLabel(self.title)
         title_label.setObjectName("page_title")
-        layout.addWidget(title_label)
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; padding-bottom: 8px;")
+        header_row.addWidget(title_label)
+        header_row.addStretch()
+
+        self._team_label = QLabel("")
+        self._team_label.setStyleSheet("font-size: 13px; color: #8E8E9E;")
+        header_row.addWidget(self._team_label)
+
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.setStyleSheet("""
+            QPushButton { background: transparent; color: #4A90D9;
+                border: 1px solid #4A90D9; border-radius: 4px;
+                padding: 4px 12px; font-size: 12px; }
+            QPushButton:hover { background: rgba(74,144,217,0.2); }
+        """)
+        refresh_btn.setCursor(Qt.PointingHandCursor)
+        refresh_btn.clicked.connect(self._load_data)
+        header_row.addWidget(refresh_btn)
+
+        self._create_btn = QPushButton("+ 创建站会")
+        self._create_btn.setStyleSheet("""
+            QPushButton { background: #52C41A; color: #FFF; border: none;
+                border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: bold; }
+            QPushButton:hover { background: #45A818; }
+        """)
+        self._create_btn.setCursor(Qt.PointingHandCursor)
+        self._create_btn.clicked.connect(self._on_create_meeting)
+        header_row.addWidget(self._create_btn)
+        layout.addLayout(header_row)
 
         # ---- 第一行: 2 张并排卡片 ----
         cards_row = QHBoxLayout()
         cards_row.setSpacing(16)
 
-        # 卡片1: 进行中的站会
-        active_card = self._create_active_card()
-        cards_row.addWidget(active_card, 1)
+        self._active_card = self._create_active_card()
+        cards_row.addWidget(self._active_card, 1)
 
-        # 卡片2: 快速统计
-        stats_card = self._create_stats_card()
-        cards_row.addWidget(stats_card, 1)
+        self._stats_card = self._create_stats_card()
+        cards_row.addWidget(self._stats_card, 1)
 
         layout.addLayout(cards_row)
 
-        # ---- 第二行: 历史站会列表 ----
-        history_label = QLabel("历史站会")
-        history_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #CCCCCC;")
+        # ---- 第二行: 站会列表 ----
+        history_label = QLabel("站会记录")
+        history_label.setStyleSheet("font-size: 15px; font-weight: bold;")
         layout.addWidget(history_label)
 
         self.table = QTableWidget()
@@ -70,53 +130,40 @@ class HomeView(QWidget):
         layout.addWidget(self.table, 1)
 
     def _card_style(self):
-        return """
-            background-color: #16213E;
-            border: 1px solid #0F3460;
-            border-radius: 10px;
-            padding: 18px;
-        """
+        return "border-radius: 10px; padding: 18px;"
 
     def _create_active_card(self):
         card = QFrame()
         card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
-
         cl = QVBoxLayout(card)
         cl.setContentsMargins(18, 14, 18, 14)
         cl.setSpacing(8)
 
-        title_lbl = QLabel("📋 进行中的站会")
-        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF;")
-        cl.addWidget(title_lbl)
+        self._active_title = QLabel("进行中的站会")
+        self._active_title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        cl.addWidget(self._active_title)
 
-        info_lbl = QLabel("Sprint#12 · 第3次")
-        info_lbl.setStyleSheet("font-size: 13px; color: #AAAAAA;")
-        cl.addWidget(info_lbl)
+        self._active_info = QLabel("暂无进行中的站会")
+        self._active_info.setStyleSheet("font-size: 13px;")
+        cl.addWidget(self._active_info)
 
         bottom_row = QHBoxLayout()
-        timer_lbl = QLabel("⏱ 剩余 08:42")
-        timer_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #4A90D9;")
-        bottom_row.addWidget(timer_lbl)
-
+        self._active_detail = QLabel("")
+        self._active_detail.setStyleSheet("font-size: 14px; color: #4A90D9;")
+        bottom_row.addWidget(self._active_detail)
         bottom_row.addStretch()
 
-        enter_btn = QPushButton("进入站会 →")
-        enter_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4A90D9;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 6px;
-                padding: 6px 16px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #5BA0E9;
-            }
+        self._enter_btn = QPushButton("进入站会")
+        self._enter_btn.setStyleSheet("""
+            QPushButton { background: #4A90D9; color: #FFF; border: none;
+                border-radius: 6px; padding: 6px 16px; font-size: 13px; }
+            QPushButton:hover { background: #5BA0E9; }
         """)
-        enter_btn.setCursor(Qt.PointingHandCursor)
-        bottom_row.addWidget(enter_btn)
+        self._enter_btn.setCursor(Qt.PointingHandCursor)
+        self._enter_btn.clicked.connect(self._on_enter_meeting)
+        self._enter_btn.setVisible(False)
+        bottom_row.addWidget(self._enter_btn)
 
         cl.addLayout(bottom_row)
         return card
@@ -125,48 +172,45 @@ class HomeView(QWidget):
         card = QFrame()
         card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
-
         cl = QVBoxLayout(card)
         cl.setContentsMargins(18, 14, 18, 14)
         cl.setSpacing(8)
 
-        title_lbl = QLabel("📊 快速统计")
-        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF;")
+        title_lbl = QLabel("快速统计")
+        title_lbl.setStyleSheet("font-size: 14px; font-weight: bold;")
         cl.addWidget(title_lbl)
 
+        self._stat_labels = {}
         stats = [
-            ("本月", "12次站会"),
-            ("出勤率", "87%"),
-            ("完成率", "73%"),
-            ("阻碍", "3个"),
+            ("total", "站会", "0"),
+            ("attendance", "出勤率", "--"),
+            ("completion", "完成率", "--"),
+            ("blockers", "阻碍", "0"),
         ]
         row1 = QHBoxLayout()
         row2 = QHBoxLayout()
-        for i, (label, value) in enumerate(stats):
-            item_widget = QWidget()
-            iv = QVBoxLayout(item_widget)
+        for i, (key, label, default) in enumerate(stats):
+            w = QWidget()
+            iv = QVBoxLayout(w)
             iv.setContentsMargins(0, 0, 0, 0)
             iv.setSpacing(2)
-
-            val_lbl = QLabel(value)
+            val_lbl = QLabel(default)
             val_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #4A90D9;")
             val_lbl.setAlignment(Qt.AlignCenter)
             iv.addWidget(val_lbl)
-
+            self._stat_labels[key] = val_lbl
             lbl = QLabel(label)
-            lbl.setStyleSheet("font-size: 11px; color: #888888;")
+            lbl.setStyleSheet("font-size: 11px;")
             lbl.setAlignment(Qt.AlignCenter)
             iv.addWidget(lbl)
-
-            (row1 if i < 2 else row2).addWidget(item_widget)
-
+            (row1 if i < 2 else row2).addWidget(w)
         cl.addLayout(row1)
         cl.addLayout(row2)
         return card
 
     def _setup_table(self):
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["日期", "Sprint", "出勤率", "完成率", "阻碍", "操作"])
+        self.table.setHorizontalHeaderLabels(["日期", "标题", "Sprint", "状态", "阻碍", ""])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
@@ -174,59 +218,143 @@ class HomeView(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
-            QTableWidget {
-                background-color: #16213E;
-                border: 1px solid #0F3460;
-                border-radius: 8px;
-                gridline-color: #0F3460;
-                color: #E0E0E0;
-            }
-            QTableWidget::item {
-                padding: 6px 8px;
-                border: none;
-            }
-            QHeaderView::section {
-                background-color: #0F3460;
-                color: #CCCCCC;
-                padding: 8px;
-                border: none;
-                font-weight: bold;
-            }
-            QTableWidget::item:alternate {
-                background-color: #1A1A3E;
-            }
+            QTableWidget { border-radius: 8px; }
+            QTableWidget::item { padding: 6px 8px; border: none; }
+            QHeaderView::section { padding: 8px; border: none; font-weight: bold; }
         """)
 
-        # 5 行占位数据
-        placeholder_data = [
-            ("2024-06-28", "Sprint#12", "87%", "73%", "3", ""),
-            ("2024-06-27", "Sprint#12", "92%", "80%", "1", ""),
-            ("2024-06-26", "Sprint#12", "85%", "68%", "2", ""),
-            ("2024-06-25", "Sprint#11", "90%", "75%", "1", ""),
-            ("2024-06-24", "Sprint#11", "88%", "71%", "0", ""),
-        ]
+    def _load_data(self):
+        if not self.api_client:
+            return
+        self._teams = self.api_client.get_teams() or []
+        if self._teams:
+            self._current_team_id = self._teams[0].get("id")
+            name = self._teams[0].get("name", "")
+            self._team_label.setText(f"团队: {name}")
+            self._create_btn.setVisible(True)
+        else:
+            self._team_label.setText("(暂无团队)")
+            self._current_team_id = None
+            self._create_btn.setVisible(False)
 
-        self.table.setRowCount(len(placeholder_data))
-        for row_idx, (date, sprint, attendance, completion, blockers, _) in enumerate(placeholder_data):
+        if self._current_team_id:
+            self._meetings = self.api_client.get_meetings(self._current_team_id) or []
+            self._refresh_table()
+            self._refresh_cards()
+            self._load_stats()
+
+    def _refresh_cards(self):
+        active = [m for m in self._meetings if m.get("status") == "ACTIVE"]
+        created = [m for m in self._meetings if m.get("status") == "CREATED"]
+        if active:
+            m = active[0]
+            self._active_title.setText("进行中的站会")
+            title = m.get("title") or f"Sprint#{m.get('sprintNo', '?')}"
+            self._active_info.setText(title)
+            self._active_detail.setText("发言进行中...")
+            self._enter_btn.setVisible(True)
+            self._enter_btn.setProperty("meeting_id", m.get("id"))
+            self._enter_btn.setProperty("meeting_data", m)
+        elif created:
+            m = created[0]
+            self._active_title.setText("待开始的站会")
+            title = m.get("title") or f"Sprint#{m.get('sprintNo', '?')}"
+            self._active_info.setText(title)
+            self._active_detail.setText("点击进入开始站会")
+            self._enter_btn.setText("进入站会")
+            self._enter_btn.setVisible(True)
+            self._enter_btn.setProperty("meeting_id", m.get("id"))
+            self._enter_btn.setProperty("meeting_data", m)
+        else:
+            self._active_title.setText("进行中的站会")
+            self._active_info.setText("暂无站会")
+            self._active_detail.setText("")
+            self._enter_btn.setVisible(False)
+
+    def _load_stats(self):
+        if not self._current_team_id or not self.api_client:
+            return
+        summary = self.api_client.get_dashboard_summary(self._current_team_id) or {}
+        self._stat_labels["total"].setText(str(summary.get("totalMeetings", 0)))
+        rate = summary.get("avgAttendanceRate", 0)
+        self._stat_labels["attendance"].setText(
+            f"{int(rate * 100)}%" if isinstance(rate, float) and rate <= 1 else f"{rate}%")
+        cr = summary.get("completionRate", 0)
+        self._stat_labels["completion"].setText(
+            f"{int(cr * 100)}%" if isinstance(cr, float) and cr <= 1 else f"{cr}%")
+        self._stat_labels["blockers"].setText(str(summary.get("activeBlockers", 0)))
+
+    def _refresh_table(self):
+        self.table.setRowCount(len(self._meetings))
+        for row_idx, m in enumerate(self._meetings):
+            date = m.get("createdAt", "")[:10] if m.get("createdAt") else ""
             self.table.setItem(row_idx, 0, QTableWidgetItem(date))
-            self.table.setItem(row_idx, 1, QTableWidgetItem(sprint))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(attendance))
-            self.table.setItem(row_idx, 3, QTableWidgetItem(completion))
-            self.table.setItem(row_idx, 4, QTableWidgetItem(blockers))
+            title = m.get("title") or f"Sprint#{m.get('sprintNo', '?')}"
+            self.table.setItem(row_idx, 1, QTableWidgetItem(title))
+            self.table.setItem(row_idx, 2, QTableWidgetItem(f"Sprint#{m.get('sprintNo', '')}"))
+            self.table.setItem(row_idx, 3, QTableWidgetItem(m.get("status", "")))
+            self.table.setItem(row_idx, 4, QTableWidgetItem("-"))
+
+            btn_row = QHBoxLayout()
+            btn_row.setSpacing(4)
+            btn_row.setContentsMargins(0, 0, 0, 0)
+
+            if m.get("status") in ("ACTIVE", "CREATED"):
+                enter_sm = QPushButton("进入")
+                enter_sm.setStyleSheet("""
+                    QPushButton { background: #4A90D9; color: #FFF; border: none;
+                        border-radius: 3px; padding: 3px 10px; font-size: 11px; }
+                    QPushButton:hover { background: #5BA0E9; }
+                """)
+                enter_sm.setCursor(Qt.PointingHandCursor)
+                mid = m.get("id")
+                md = m
+                enter_sm.clicked.connect(lambda checked=False, mid=mid, md=md: self._enter_meeting(mid, md))
+                btn_row.addWidget(enter_sm)
 
             view_btn = QPushButton("查看")
             view_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: transparent;
-                    color: #4A90D9;
-                    border: 1px solid #4A90D9;
-                    border-radius: 4px;
-                    padding: 3px 12px;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(74, 144, 217, 0.2);
-                }
+                QPushButton { background: transparent; color: #4A90D9;
+                    border: 1px solid #4A90D9; border-radius: 3px;
+                    padding: 3px 10px; font-size: 11px; }
+                QPushButton:hover { background: rgba(74,144,217,0.2); }
             """)
             view_btn.setCursor(Qt.PointingHandCursor)
-            self.table.setCellWidget(row_idx, 5, view_btn)
+            mid = m.get("id")
+            md = m
+            view_btn.clicked.connect(lambda checked=False, mid=mid, md=md: self._on_view_meeting(mid, md))
+            btn_row.addWidget(view_btn)
+
+            wrapper = QWidget()
+            wrapper.setLayout(btn_row)
+            self.table.setCellWidget(row_idx, 5, wrapper)
+
+    def _on_create_meeting(self):
+        if not self._current_team_id:
+            QMessageBox.warning(self, "提示", "请先在团队页面创建或加入一个团队")
+            return
+        dlg = CreateMeetingDialog(self.api_client, self._current_team_id, self)
+        if dlg.exec() == QDialog.Accepted:
+            self._load_data()
+            self.meeting_created.emit()
+
+    def _on_enter_meeting(self):
+        mid = self._enter_btn.property("meeting_id")
+        md = self._enter_btn.property("meeting_data")
+        if mid:
+            self._enter_meeting(mid, md)
+
+    def _enter_meeting(self, meeting_id, meeting_data=None):
+        # 先确保站会已开始
+        if self.api_client:
+            meeting = meeting_data
+            if not meeting or meeting.get("status") != "ACTIVE":
+                self.api_client.start_meeting(str(meeting_id))
+        self.navigate_to_meeting.emit(meeting_id, meeting_data or {})
+
+    def _on_view_meeting(self, meeting_id, meeting_data=None):
+        if meeting_data and meeting_data.get("status") == "ACTIVE":
+            self._enter_meeting(meeting_id, meeting_data)
+        else:
+            QMessageBox.information(self, "站会详情",
+                f"站会 #{meeting_id}\n标题: {meeting_data.get('title', 'N/A') if meeting_data else 'N/A'}\n状态: {meeting_data.get('status', 'N/A') if meeting_data else 'N/A'}")

@@ -1,219 +1,200 @@
-# api_client.py — API 客户端桩（单例模式）
-# 所有方法返回空占位数据，不做真实网络请求
-
+# api_client.py — API 客户端
+import requests
+import os
 from typing import Optional
+
+# 可配置：环境变量 > 默认值
+BASE_URL = os.environ.get("STANDUPSYNC_API", "http://localhost:8080")
 
 
 class APIClient:
-    """单例 API 客户端，提供所有占位数据。"""
+    """单例 API 客户端。后端不可用时返回 None/空列表，不伪造数据。"""
 
     _instance: Optional["APIClient"] = None
+
+    @staticmethod
+    def base_url() -> str:
+        return BASE_URL
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.token = None
+            cls._instance.user_id = None
+            cls._instance.role = None
+            cls._instance.username = ""
+            cls._instance._online = None
         return cls._instance
 
-    # ── 认证 ──
-    def login(self, username: str, password: str) -> dict:
-        return {
-            "token": "stub-token-abc123",
-            "user": {
-                "id": "1",
-                "display_name": username,
-                "role": "tech_lead",
-            },
-        }
+    @property
+    def online(self) -> bool:
+        if self._online is None:
+            try:
+                r = requests.get(f"{BASE_URL}/", timeout=2)
+                self._online = r.status_code < 500
+            except Exception:
+                self._online = False
+        return self._online
 
-    # ── 团队 ──
-    def get_teams(self) -> list[dict]:
-        return [
-            {"id": "1", "name": "核心开发组", "role": "tech_lead"},
-            {"id": "2", "name": "前端团队", "role": "scrum_master"},
-        ]
+    def _headers(self) -> dict:
+        h = {"Content-Type": "application/json"}
+        if self.token:
+            h["Authorization"] = f"Bearer {self.token}"
+        return h
 
-    def get_team_members(self, team_id: str) -> list[dict]:
-        return [
-            {"id": "1", "name": "张三", "role": "Tech Lead", "attendance": 0.95, "completion": 0.92},
-            {"id": "2", "name": "李四", "role": "Scrum Master", "attendance": 0.88, "completion": 0.75},
-            {"id": "3", "name": "王五", "role": "Developer", "attendance": 0.90, "completion": 0.60},
-            {"id": "4", "name": "赵六", "role": "Developer", "attendance": 0.72, "completion": 0.45},
-            {"id": "5", "name": "孙七", "role": "Observer", "attendance": 0.50, "completion": 0.30},
-        ]
+    def _get(self, path: str, fallback=None):
+        if not self.online:
+            return fallback
+        try:
+            r = requests.get(f"{BASE_URL}{path}", headers=self._headers(), timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("data", data)
+        except Exception:
+            pass
+        return fallback
 
-    # ── 站会 ──
-    def get_meetings(self, team_id: str) -> list[dict]:
-        return [
-            {
-                "id": "1",
-                "date": "06-25",
-                "sprint": "Sprint #12",
-                "attendance": "4/5",
-                "completion": "80%",
-                "blockers": 2,
-            },
-            {
-                "id": "2",
-                "date": "06-26",
-                "sprint": "Sprint #12",
-                "attendance": "5/5",
-                "completion": "85%",
-                "blockers": 1,
-            },
-        ]
+    def _post(self, path: str, body: dict, fallback=None):
+        if not self.online:
+            return fallback
+        try:
+            r = requests.post(f"{BASE_URL}{path}", json=body, headers=self._headers(), timeout=5)
+            return r.json()
+        except Exception:
+            return fallback
 
-    # ── 待办 ──
-    def get_todos(self, status: Optional[str] = None) -> list[dict]:
-        data = [
-            {
-                "id": "1",
-                "content": "修复登录页面 Bug",
-                "priority": "high",
-                "status": "pending",
-                "assignee": "张三",
-                "due": "明天",
-                "source": "06-25 站会",
-            },
-            {
-                "id": "2",
-                "content": "重构用户模块接口",
-                "priority": "medium",
-                "status": "in_progress",
-                "assignee": "李四",
-                "due": "本周五",
-                "source": "06-24 站会",
-            },
-            {
-                "id": "3",
-                "content": "编写单元测试",
-                "priority": "low",
-                "status": "completed",
-                "assignee": "王五",
-                "due": "已完成",
-                "source": "06-23 站会",
-            },
-            {
-                "id": "4",
-                "content": "更新 API 文档",
-                "priority": "medium",
-                "status": "pending",
-                "assignee": "赵六",
-                "due": "下周一",
-                "source": "06-25 站会",
-            },
-            {
-                "id": "5",
-                "content": "性能优化 - 首页加载",
-                "priority": "high",
-                "status": "in_progress",
-                "assignee": "张三",
-                "due": "今天",
-                "source": "06-25 站会",
-            },
-            {
-                "id": "6",
-                "content": "代码审查 PR#42",
-                "priority": "medium",
-                "status": "pending",
-                "assignee": "李四",
-                "due": "明天",
-                "source": "06-25 同步",
-            },
-            {
-                "id": "7",
-                "content": "修复 SQL 注入漏洞",
-                "priority": "high",
-                "status": "pending",
-                "assignee": "王五",
-                "due": "紧急",
-                "source": "安全扫描",
-            },
-            {
-                "id": "8",
-                "content": "国际化文案整理",
-                "priority": "low",
-                "status": "in_progress",
-                "assignee": "赵六",
-                "due": "下周",
-                "source": "06-24 站会",
-            },
-            {
-                "id": "9",
-                "content": "上线前回归测试",
-                "priority": "high",
-                "status": "completed",
-                "assignee": "张三",
-                "due": "已完成",
-                "source": "06-25 站会",
-            },
-            {
-                "id": "10",
-                "content": "设计评审准备",
-                "priority": "medium",
-                "status": "completed",
-                "assignee": "李四",
-                "due": "已完成",
-                "source": "06-25 站会",
-            },
-            {
-                "id": "11",
-                "content": "CI/CD 流水线修复",
-                "priority": "high",
-                "status": "completed",
-                "assignee": "王五",
-                "due": "已完成",
-                "source": "06-23 站会",
-            },
-            {
-                "id": "12",
-                "content": "依赖版本升级",
-                "priority": "low",
-                "status": "completed",
-                "assignee": "赵六",
-                "due": "已完成",
-                "source": "06-25 站会",
-            },
-        ]
+    # ═══════════════════════════════════════════════
+    #  认证
+    # ═══════════════════════════════════════════════
+    def login(self, username: str, password: str) -> Optional[dict]:
+        resp = self._post("/api/auth/login", {"username": username, "password": password})
+        if resp and resp.get("code") == 200:
+            data = resp["data"]
+            self.token = data.get("token")
+            self.user_id = data.get("userId")
+            self.role = data.get("role")
+            self.username = username
+            return data
+        return None
+
+    def register(self, username: str, password: str, display_name: str = "") -> Optional[dict]:
+        resp = self._post("/api/auth/register", {
+            "username": username, "password": password, "displayName": display_name or username
+        })
+        if resp and resp.get("code") == 200:
+            data = resp["data"]
+            self.token = data.get("token")
+            self.user_id = data.get("userId")
+            self.role = data.get("role")
+            self.username = username
+            return data
+        return None
+
+    # ═══════════════════════════════════════════════
+    #  团队
+    # ═══════════════════════════════════════════════
+    def get_teams(self) -> list:
+        online = self._get("/api/teams")
+        if online and isinstance(online, list):
+            return online
+        return []
+
+    def get_team_members(self, team_id) -> list:
+        online = self._get(f"/api/teams/{team_id}")
+        if online and isinstance(online, dict):
+            return online.get("members", [])
+        return []
+
+    def get_invite_code(self, team_id) -> Optional[str]:
+        online = self._post(f"/api/teams/{team_id}/invite", {})
+        if online and isinstance(online, dict):
+            data = online.get("data", online)
+            return data.get("code") or data.get("inviteCode")
+        return None
+
+    # ═══════════════════════════════════════════════
+    #  站会
+    # ═══════════════════════════════════════════════
+    def get_meetings(self, team_id) -> list:
+        online = self._get(f"/api/meetings?teamId={team_id}")
+        if online and isinstance(online, list):
+            return online
+        return []
+
+    def create_meeting(self, team_id, sprint_no: str = None, title: str = None, participants: list = None) -> Optional[dict]:
+        body = {"teamId": team_id, "sprintNo": sprint_no}
+        if title:
+            body["title"] = title
+        return self._post("/api/meetings", body)
+
+    def start_meeting(self, meeting_id) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/start", {})
+
+    def end_meeting(self, meeting_id) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/end", {})
+
+    def submit_speech(self, meeting_id: str, yesterday: str, today: str, blockers: str) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/speeches", {
+            "yesterday": yesterday, "today": today, "blockers": blockers
+        })
+
+    def get_speeches(self, meeting_id: str) -> list:
+        online = self._get(f"/api/meetings/{meeting_id}/speeches")
+        return online if isinstance(online, list) else []
+
+    # ═══════════════════════════════════════════════
+    #  AI
+    # ═══════════════════════════════════════════════
+    def analyze_meeting(self, meeting_id: str) -> Optional[dict]:
+        return self._post(f"/api/meetings/{meeting_id}/analyze", {})
+
+    def get_ai_status(self, meeting_id: str) -> Optional[dict]:
+        return self._get(f"/api/meetings/{meeting_id}/ai-status")
+
+    # ═══════════════════════════════════════════════
+    #  待办
+    # ═══════════════════════════════════════════════
+    def get_todos(self, status: str = None) -> list:
+        path = "/api/action-items"
         if status:
-            data = [t for t in data if t["status"] == status]
-        return data
+            path += f"?status={status}"
+        online = self._get(path)
+        return online if isinstance(online, list) else []
 
-    def update_todo_status(self, todo_id: str, status: str) -> dict:
-        return {"id": todo_id, "status": status, "updated": True}
+    def create_todo(self, content: str, assignee_id: str = None, priority: str = "MEDIUM") -> Optional[dict]:
+        body = {"content": content, "priority": priority}
+        if assignee_id:
+            body["assigneeId"] = assignee_id
+        return self._post("/api/action-items", body)
 
-    # ── 看板/仪表盘 ──
-    def get_dashboard_summary(self, team_id: str) -> dict:
-        return {
-            "total_meetings": 12,
-            "avg_attendance": 0.87,
-            "completion_rate": 0.73,
-            "active_blockers": 3,
-        }
+    def update_todo(self, todo_id: str, updates: dict) -> Optional[dict]:
+        try:
+            r = requests.put(f"{BASE_URL}/api/action-items/{todo_id}", json=updates, headers=self._headers(), timeout=5)
+            return r.json()
+        except Exception:
+            return None
 
-    def get_dashboard_trend(self, team_id: str) -> list[dict]:
-        return [
-            {"date": "06-01", "rate": 0.80},
-            {"date": "06-03", "rate": 0.85},
-            {"date": "06-05", "rate": 0.90},
-            {"date": "06-07", "rate": 0.82},
-            {"date": "06-09", "rate": 0.88},
-            {"date": "06-11", "rate": 0.91},
-            {"date": "06-13", "rate": 0.87},
-        ]
+    def delete_todo(self, todo_id: str) -> Optional[dict]:
+        try:
+            r = requests.delete(f"{BASE_URL}/api/action-items/{todo_id}", headers=self._headers(), timeout=5)
+            return r.json()
+        except Exception:
+            return None
 
-    def get_member_ranking(self, team_id: str) -> list[dict]:
-        return [
-            {"name": "张三", "total": 12, "rate": 0.92},
-            {"name": "李四", "total": 8, "rate": 0.75},
-            {"name": "王五", "total": 15, "rate": 0.60},
-            {"name": "赵六", "total": 5, "rate": 0.45},
-            {"name": "孙七", "total": 3, "rate": 0.30},
-        ]
+    # ═══════════════════════════════════════════════
+    #  看板
+    # ═══════════════════════════════════════════════
+    def get_dashboard_summary(self, team_id) -> Optional[dict]:
+        return self._get(f"/api/dashboard/summary?teamId={team_id}")
 
-    # ── 邀请 ──
-    def get_invite_code(self, team_id: str) -> str:
-        return "A3F8K2"
+    def get_dashboard_trend(self, team_id, trend_type="attendance") -> list:
+        if trend_type == "blocker":
+            path = f"/api/dashboard/blocker-distribution?teamId={team_id}"
+        else:
+            path = f"/api/dashboard/{trend_type}-trend?teamId={team_id}"
+        online = self._get(path)
+        return online if isinstance(online, list) else []
 
-    def dissolve_team(self, team_id: str) -> dict:
-        return {"dissolved": True}
+    def get_member_ranking(self, team_id) -> list:
+        online = self._get(f"/api/dashboard/member-ranking?teamId={team_id}")
+        return online if isinstance(online, list) else []

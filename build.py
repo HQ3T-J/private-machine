@@ -1,6 +1,4 @@
 # StandupSync Desktop — PyInstaller 打包脚本
-# 运行: python build.py
-
 import PyInstaller.__main__
 import os
 
@@ -18,6 +16,7 @@ PyInstaller.__main__.run([
     f'--add-data={root}/api_client.py{os.pathsep}.',
     f'--add-data={root}/app.py{os.pathsep}.',
     f'--add-data={root}/views{os.pathsep}views',
+    f'--add-data={root}/services{os.pathsep}services',
     '--hidden-import=PySide6.QtCore',
     '--hidden-import=PySide6.QtGui',
     '--hidden-import=PySide6.QtWidgets',
@@ -34,6 +33,11 @@ PyInstaller.__main__.run([
     '--hidden-import=views.dashboard_view',
     '--hidden-import=views.team_view',
     '--hidden-import=views.settings_view',
+    '--hidden-import=services',
+    '--hidden-import=services.dashboard_engine',
+    '--hidden-import=services.ai_engine',
+    '--hidden-import=requests',
+    '--hidden-import=urllib3',
     '--exclude-module=tkinter',
     '--exclude-module=matplotlib',
     '--exclude-module=numpy',

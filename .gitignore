@@ -22,5 +22,13 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Dev artifacts
+# Java backend build artifacts (55MB JAR)
+backend/target/
+backend/*.db
+
+# Dev test scripts
+test_*.sh
 _test_verify.py
+
+# Hermes specific
+.hermes/
