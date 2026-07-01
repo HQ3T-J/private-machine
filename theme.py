@@ -7,6 +7,7 @@ DARK_STYLE = """
 QMainWindow { background-color: #1A1A2E; color: #FFFFFF; }
 QMainWindow::separator { background-color: #2A2A4E; width: 1px; height: 1px; }
 QWidget { background-color: #1A1A2E; color: #FFFFFF; font-family: "Microsoft YaHei","Segoe UI",sans-serif; font-size: 13px; }
+QFrame { background-color: #1A1A2E; }
 QLabel { background-color: transparent; color: #FFFFFF; border: none; }
 QPushButton { background-color: #4A9ED9; color: #FFFFFF; border: none; border-radius: 6px; padding: 8px 20px; font-weight: bold; min-height: 20px; }
 QPushButton:hover { background-color: #5DB3E8; }
@@ -98,6 +99,7 @@ LIGHT_STYLE = """
 QMainWindow { background-color: #F4F6F8; color: #262626; }
 QMainWindow::separator { background-color: #E5E5E5; width: 1px; height: 1px; }
 QWidget { background-color: #F4F6F8; color: #262626; font-family: "Microsoft YaHei","Segoe UI",sans-serif; font-size: 13px; }
+QFrame { background-color: #F4F6F8; }
 QLabel { background-color: transparent; color: #262626; border: none; }
 
 /* ── 按钮 ── */
