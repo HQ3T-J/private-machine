@@ -4,9 +4,12 @@ StandupSync Desktop — 应用入口
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
+
+# 高 DPI 适配
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 from theme import DARK_STYLE, LIGHT_STYLE
 
 

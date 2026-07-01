@@ -93,11 +93,11 @@ class SettingsView(QWidget):
         layout.addStretch(1)
 
         logout = QPushButton("退出登录")
+        logout.setObjectName("LogoutBtn")
         logout.setStyleSheet("""
-            QPushButton { background: transparent; color: #FF4D4D;
-                border: 1px solid #FF4D4D; border-radius: 8px;
-                padding: 10px; font-size: 14px; font-weight: bold; }
-            QPushButton:hover { background: rgba(255,77,77,0.15); }
+            QPushButton#LogoutBtn { background: transparent; border: 1px solid #FF4D4D;
+                border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; color: #FF4D4D; }
+            QPushButton#LogoutBtn:hover { background: rgba(255,77,77,0.15); }
         """)
         logout.setCursor(Qt.PointingHandCursor)
         logout.clicked.connect(self._on_logout)

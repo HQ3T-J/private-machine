@@ -136,7 +136,8 @@ class TeamView(QWidget):
             for a in apps:
                 if a.get("userId") == uid:
                     self._my_application = a; return
-        except Exception: pass
+        except Exception as e:
+            print(f"[TeamView] Check application failed: {e}")
 
     def _clear_ui(self):
         self._members = []; self._current_team_id = None; self._current_role = None
@@ -396,7 +397,8 @@ class TeamView(QWidget):
             if 0 <= row < len(self._members): del self._members[row]
             self._populate_members()
             self.member_removed.emit(str(user_id))
-        except Exception: pass
+        except Exception as e:
+            print(f"[TeamView] Remove member failed: {e}")
 
     def _on_dissolve(self):
         if self._current_role != "TECH_LEAD":

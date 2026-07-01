@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
     QProgressBar, QSizePolicy, QPushButton, QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal, QPointF, QTimer
+from widgets import EmptyState
 from PySide6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPolygonF
+from widgets import StatCard
 
 # ── 辅助样式 ──
 def _combo_style(): return "QComboBox{border-radius:4px;padding:4px 8px;font-size:12px;}"
@@ -21,26 +23,8 @@ def _table_style(): return "QTableWidget{border:none;font-size:12px;} QTableWidg
 _BLOCKER_MAP = {"技术":"tech","资源":"resource","沟通":"communication","其他":"other"}
 
 # ═══════════════════════════════════════════════════════════
-#  UI 组件
+#  UI 组件（StatCard 统一由 widgets 提供）
 # ═══════════════════════════════════════════════════════════
-
-class StatCard(QFrame):
-    def __init__(self, title, value="—", subtitle="", color="#4A9ED9", parent=None):
-        super().__init__(parent)
-        self.setObjectName("StatCard")
-        self.setFixedSize(200, 100)
-        l = QVBoxLayout(self); l.setContentsMargins(16,12,16,12); l.setSpacing(2)
-        t = QLabel(title); t.setStyleSheet("font-size:12px;"); l.addWidget(t)
-        vr = QHBoxLayout(); vr.setSpacing(6)
-        self._val = QLabel(str(value))
-        self._val.setStyleSheet(f"color:{color};font-size:28px;font-weight:bold;")
-        vr.addWidget(self._val); vr.addStretch(); l.addLayout(vr)
-        if subtitle:
-            s = QLabel(subtitle); s.setStyleSheet("font-size:11px;"); l.addWidget(s)
-        l.addStretch()
-        self.setStyleSheet(f"#StatCard{{border-radius:8px;border-left:3px solid {color};}}")
-
-    def update_value(self, text): self._val.setText(str(text))
 
 class TrendMiniChart(QFrame):
     def __init__(self, title, color="#4A9ED9", parent=None):
@@ -196,7 +180,7 @@ class DashboardView(QWidget):
         sr = QHBoxLayout(); sr.setSpacing(16); self._cards = {}
         for k, t, c in [("meetings","站会次数","#4A9ED9"),("attendance","平均出勤率","#52C41A"),
                          ("completion","待办完成率","#F5A623"),("blockers","活跃阻碍","#E74C3C")]:
-            card = StatCard(t, "—", "", c); self._cards[k] = card; sr.addWidget(card)
+            card = StatCard(t, "—", accent_color=c, fixed_size=(200,100)); self._cards[k] = card; sr.addWidget(card)
         sr.addStretch(); layout.addLayout(sr)
 
         # ── 趋势图 ──
@@ -287,9 +271,9 @@ class DashboardView(QWidget):
         self._trend_att.set_data(att_data)
         self._trend_comp.set_data(comp_data)
 
-        # Blocker — 用后端 blockerType
+        # Blocker — 用后端 trend blocker 端点
         bt = _BLOCKER_MAP.get(f.get("blocker_type")) if f.get("blocker_type") else None
-        blocker_data = c.get_dashboard_blocker(self._team_id, bt)
+        blocker_data = c.get_dashboard_trend(self._team_id, "blocker")
         self._blocker.set_data(blocker_data)
 
         # Ranking — 用后端 sortBy
@@ -420,7 +404,8 @@ def _build_blocker_dist(meetings, api_client):
                 elif any(kw in b for kw in ["资源","人力","排期","人手","budget","equipment"]): cats["resource"] += 1
                 elif any(kw in b for kw in ["沟通","需求","确认","对齐","不清楚","等待"]): cats["communication"] += 1
                 else: cats["other"] += 1
-        except: pass
+        except Exception:
+            pass  # 单个站会的发言获取失败不影响整体统计
     return [{"type": k, "label": labels[k], "count": cats[k], "color": colors[k]} for k in cats if cats[k] > 0]
 
 def _build_ranking(items, api_client):

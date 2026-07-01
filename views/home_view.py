@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QFormLayout, QDialogButtonBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
+from widgets import EmptyState
 
 
 class CreateMeetingDialog(QDialog):
@@ -83,7 +84,7 @@ class HomeView(QWidget):
         header_row.addStretch()
 
         self._team_label = QLabel("")
-        self._team_label.setStyleSheet("font-size: 13px; color: #8E8E9E;")
+        self._team_label.setStyleSheet("font-size: 13px;")
         header_row.addWidget(self._team_label)
 
         self._team_combo = QComboBox()
@@ -93,11 +94,11 @@ class HomeView(QWidget):
         header_row.addWidget(self._team_combo)
 
         refresh_btn = QPushButton("刷新")
+        refresh_btn.setObjectName("RefreshBtn")
         refresh_btn.setStyleSheet("""
-            QPushButton { background: transparent; color: #4A90D9;
-                border: 1px solid #4A90D9; border-radius: 4px;
-                padding: 4px 12px; font-size: 12px; }
-            QPushButton:hover { background: rgba(74,144,217,0.2); }
+            QPushButton#RefreshBtn { background: transparent; border: 1px solid #4A90D9;
+                border-radius: 4px; padding: 4px 12px; font-size: 12px; color: #4A90D9; }
+            QPushButton#RefreshBtn:hover { background: rgba(74,144,217,0.2); }
         """)
         refresh_btn.setCursor(Qt.PointingHandCursor)
         refresh_btn.clicked.connect(self._load_data)
@@ -223,11 +224,8 @@ class HomeView(QWidget):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
-        self.table.setStyleSheet("""
-            QTableWidget { border-radius: 8px; }
-            QTableWidget::item { padding: 6px 8px; border: none; }
-            QHeaderView::section { padding: 8px; border: none; font-weight: bold; }
-        """)
+        # 表格圆角（颜色由全局QSS管理）
+        self.table.setStyleSheet("QTableWidget { border-radius: 8px; }")
 
     def _load_data(self):
         if not self.api_client:

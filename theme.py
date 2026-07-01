@@ -1,7 +1,30 @@
 """
-StandupSync 主题样式表
-导出 DARK_STYLE / LIGHT_STYLE 供全局切换。
+StandupSync 主题样式表 + 色彩常量
+导出 DARK_STYLE / LIGHT_STYLE / SEMANTIC 供全局使用。
+
+规则：
+- 非语义背景/文字色只在 QSS 中定义，Python 代码禁止硬编码
+- 语义色（成功/警告/错误/主色）可通过 SEMANTIC 字典引用
+- 业务组件通过 ObjectName 选择器匹配（#xxx）
 """
+# ============================================================================
+# 语义色彩常量（跨主题不变，Python 代码中仅允许使用这些）
+# ============================================================================
+SEMANTIC = {
+    "success":       "#52C41A",
+    "success_hover": "#45A818",
+    "warning":       "#F5A623",
+    "warning_hover": "#D4901E",
+    "error":         "#E74C3C",
+    "error_hover":   "#C0392B",
+    "primary":       "#4A9ED9",
+    "primary_hover": "#5DB3E8",
+    "primary_press": "#3A8EC9",
+}
+
+# ============================================================================
+# 深色主题 (DARK)
+# ============================================================================
 
 DARK_STYLE = """
 QMainWindow { background-color: #1A1A2E; color: #FFFFFF; }
@@ -74,8 +97,12 @@ QListWidget, QTreeWidget { background-color: #16213E; color: #FFFFFF; border: 1p
 QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #0F3460; color: #4A9ED9; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #1E2D50; }
+
+/* ── Sidebar ── */
 QFrame#Sidebar { background-color: #1A1A2E; border-right: 1px solid #2A2A4A; }
 QFrame#Sidebar QPushButton { background: transparent; text-align: left; }
+
+/* ── Meeting Room ── */
 QFrame#MemberPanel, QFrame#SpeechPanel, QFrame#ApprovalPanel { background-color: #161B22; border-radius: 8px; }
 QFrame#VideoPanel { background-color: #161B22; border-radius: 8px; border: 1px solid #30363D; }
 QFrame#VideoSlot { background-color: #0D1117; border-radius: 6px; border: 1px solid #30363D; }
@@ -83,7 +110,33 @@ QFrame#AIPreview { background-color: #0D1117; border-radius: 4px; }
 QFrame#ApplyStatus { background-color: #2A2A1A; border-radius: 4px; }
 QFrame#StatCard { background-color: #161B22; border-radius: 10px; padding: 18px; }
 QTextEdit#MeetingInput { background-color: #0D1117; border-radius: 8px; border: 1px solid #30363D; }
+
+/* ── Todo View ── */
+#todoTabBar { border-bottom: 1px solid transparent; }
+#todoTabBar QPushButton { background: transparent; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; color: #8E8E9E; }
+#todoTabBar QPushButton:checked { color: #4A9ED9; font-weight: bold; }
+#todoTabBar QPushButton:hover { color: #FFFFFF; }
+#btnMarkComplete { background-color: #52C41A; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnMarkComplete:hover { background-color: #45A818; }
+#btnMarkProgress { background-color: #F5A623; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnMarkProgress:hover { background-color: #D4901E; }
+#btnTransfer { background-color: #4A9ED9; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnTransfer:hover { background-color: #3A8EC9; }
+#todoDetailPanel { border-left: 1px solid #2A2A4A; }
+QFrame#todoSeparator { max-height: 1px; color: #2A2A4E; }
+
+/* ── Dashboard ── */
+#RankFrame { background-color: #16213E; border-radius: 8px; }
+QFrame#FilterTag { background-color: #16213E; border: 1px solid #2A2A4E; border-radius: 4px; }
+
+/* ── Settings ── */
+#LogoutBtn { background: transparent; color: #FF4D4D; border: 1px solid #FF4D4D; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; }
+#LogoutBtn:hover { background: rgba(255,77,77,0.15); }
 """
+
+# ============================================================================
+# 浅色主题 (LIGHT)
+# ============================================================================
 
 LIGHT_STYLE = """
 QMainWindow { background-color: #F4F6F8; color: #262626; }
@@ -156,13 +209,39 @@ QListWidget, QTreeWidget { background-color: #FFFFFF; color: #262626; border: 1p
 QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #E6F7FF; color: #1890FF; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #E6F7FF; }
+
+/* ── Sidebar ── */
 QFrame#Sidebar { background-color: #FFFFFF; border-right: 1px solid #E5E5E5; }
 QFrame#Sidebar QPushButton { background: transparent; text-align: left; }
-QFrame#MemberPanel, QFrame#SpeechPanel, QFrame#ApprovalPanel { background-color: #FFFFFF; border-radius: 8px; }
+
+/* ── Meeting Room ── */
+QFrame#MemberPanel, QFrame#SpeechPanel, QFrame#ApprovalPanel { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
 QFrame#VideoPanel { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
 QFrame#VideoSlot { background-color: #F4F6F8; border-radius: 6px; border: 1px solid #E5E5E5; }
 QFrame#AIPreview { background-color: #F4F6F8; border-radius: 4px; }
 QFrame#ApplyStatus { background-color: #FFF8E1; border-radius: 4px; }
+QFrame#StatCard { background-color: #FFFFFF; border-radius: 10px; padding: 18px; border: 1px solid #E5E5E5; }
 QTextEdit#MeetingInput { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
-QFrame#StatCard { background-color: #FFFFFF; border-radius: 10px; padding: 18px; }
+
+/* ── Todo View ── */
+#todoTabBar { border-bottom: 1px solid transparent; }
+#todoTabBar QPushButton { background: transparent; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; color: #8C8C8C; }
+#todoTabBar QPushButton:checked { color: #1890FF; font-weight: bold; }
+#todoTabBar QPushButton:hover { color: #262626; }
+#btnMarkComplete { background-color: #52C41A; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnMarkComplete:hover { background-color: #45A818; }
+#btnMarkProgress { background-color: #F5A623; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnMarkProgress:hover { background-color: #D4901E; }
+#btnTransfer { background-color: #1890FF; color: #FFFFFF; border: none; border-radius: 4px; padding: 8px 12px; font-size: 12px; font-weight: bold; }
+#btnTransfer:hover { background-color: #096DD9; }
+#todoDetailPanel { border-left: 1px solid #E5E5E5; }
+QFrame#todoSeparator { max-height: 1px; color: #E5E5E5; }
+
+/* ── Dashboard ── */
+#RankFrame { background-color: #FFFFFF; border: 1px solid #E5E5E5; border-radius: 8px; }
+QFrame#FilterTag { background-color: #FFFFFF; border: 1px solid #E5E5E5; border-radius: 4px; }
+
+/* ── Settings ── */
+#LogoutBtn { background: transparent; color: #FF4D4D; border: 1px solid #FF4D4D; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; }
+#LogoutBtn:hover { background: rgba(255,77,77,0.15); }
 """

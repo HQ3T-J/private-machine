@@ -87,13 +87,18 @@ class APIClient:
     # ═══ 基础 ═══
     @property
     def online(self) -> bool:
+        """后端在线状态（惰性检测，由 _get/_post 自动更新）"""
         if self._online is None:
-            try:
-                r = requests.get(f"{BASE_URL}/", timeout=2)
-                self._online = r.status_code < 500
-            except Exception:
-                self._online = False
+            self._check_online()
         return self._online
+
+    def _check_online(self):
+        """快速检测后端是否在线（1秒超时）"""
+        try:
+            r = requests.get(f"{BASE_URL}/", timeout=1)
+            self._online = r.status_code < 500
+        except Exception:
+            self._online = False
 
     def _headers(self) -> dict:
         h = {"Content-Type": "application/json"}
@@ -102,25 +107,32 @@ class APIClient:
         return h
 
     def _get(self, path: str, fallback=None):
-        if not self.online:
-            return fallback
         try:
             r = requests.get(f"{BASE_URL}{path}", headers=self._headers(), timeout=5)
+            self._online = True
             if r.status_code == 200:
                 data = r.json()
                 return data.get("data", data)
+            if r.status_code >= 500:
+                self._online = False
+                return fallback
+        except requests.ConnectionError:
+            self._online = False
+            return fallback
         except Exception:
-            pass
+            return fallback
         return fallback
 
     def _post(self, path: str, body: dict, fallback=None):
-        if not self.online:
-            return fallback
         try:
             r = requests.post(f"{BASE_URL}{path}", json=body, headers=self._headers(), timeout=5)
+            self._online = True
             if r.status_code != 200:
                 return r.json()
             return r.json()
+        except requests.ConnectionError:
+            self._online = False
+            return fallback
         except Exception as e:
             print(f"[APIClient._post] Error: {e}")
             return fallback

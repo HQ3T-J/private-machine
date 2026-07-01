@@ -1,5 +1,6 @@
 """
 可复用 UI 组件：StatCard, EmptyState, Toast
+所有颜色遵循：语义色用 theme.SEMANTIC，非语义色走全局 QSS
 """
 
 from PySide6.QtWidgets import (
@@ -13,7 +14,7 @@ from PySide6.QtGui import QFont
 
 
 # ============================================================================
-# StatCard — 关键数字卡片
+# StatCard — 关键数字卡片（统一版，兼容 home_view 和 dashboard_view）
 # ============================================================================
 
 class StatCard(QFrame):
@@ -22,40 +23,46 @@ class StatCard(QFrame):
 
     参数:
         title (str): 卡片标题（显示在顶部，灰色小字）
-        value (str): 主要数值（24px 大字）
+        value (str): 主要数值（28px 大字）
+        subtitle (str): 副标题文本（小字，dashboard 用法）
         trend (str): 趋势文本，如 "↑2"
         trend_color (str): 趋势颜色，如 "#52C41A" / "#E74C3C"
+        accent_color (str): 左侧色条颜色（dashboard 用法），None 则不显示色条
+        fixed_size (tuple): 固定尺寸 (w, h)，None 则不固定
     """
 
-    def __init__(self, title="", value="", trend="", trend_color="#52C41A",
+    def __init__(self, title="", value="", subtitle="", trend="",
+                 trend_color="#52C41A", accent_color=None, fixed_size=None,
                  parent=None):
         super().__init__(parent)
         self.setObjectName("StatCard")
-        self.setMinimumSize(160, 90)
 
-        # 卡片基础样式（颜色由全局主题控制）
-        self.setStyleSheet("""
-            QFrame#StatCard {
-                border-radius: 10px;
-            }
-        """)
+        if fixed_size:
+            self.setFixedSize(*fixed_size)
+
+        # 左侧色条
+        if accent_color:
+            self.setStyleSheet(
+                f"#StatCard{{border-radius:8px;border-left:3px solid {accent_color};}}")
+        else:
+            self.setStyleSheet("#StatCard{border-radius:10px;}")
 
         # ----- 主布局 -----
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(4)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(2)
 
         # 标题
         self._title_label = QLabel(title)
-        self._title_label.setStyleSheet("font-size: 11px;")
+        self._title_label.setStyleSheet("font-size: 12px;")
         layout.addWidget(self._title_label)
 
         # 数值行（数值 + 趋势）
         value_row = QHBoxLayout()
-        value_row.setSpacing(8)
+        value_row.setSpacing(6)
 
         self._value_label = QLabel(value)
-        self._value_label.setFont(QFont("Microsoft YaHei", 24, QFont.Weight.Bold))
+        self._value_label.setStyleSheet("font-size: 28px; font-weight: bold;")
         value_row.addWidget(self._value_label)
 
         self._trend_label = QLabel(trend)
@@ -64,11 +71,15 @@ class StatCard(QFrame):
         )
         value_row.addWidget(self._trend_label)
         value_row.addStretch()
-
         layout.addLayout(value_row)
 
-    # ---------- 属性接口 ----------
+        # 副标题（dashboard 用法）
+        self._subtitle_label = QLabel(subtitle)
+        self._subtitle_label.setStyleSheet("font-size: 11px;")
+        layout.addWidget(self._subtitle_label)
+        layout.addStretch()
 
+    # ---------- 属性接口 ----------
     @property
     def title(self):
         return self._title_label.text()
@@ -85,6 +96,10 @@ class StatCard(QFrame):
     def value(self, text):
         self._value_label.setText(text)
 
+    def update_value(self, text):
+        """便捷方法：更新数值"""
+        self._value_label.setText(str(text))
+
     @property
     def trend(self):
         return self._trend_label.text()
@@ -94,14 +109,12 @@ class StatCard(QFrame):
         self._trend_label.setText(text)
 
     @property
-    def trend_color(self):
-        return self._trend_label.styleSheet()
+    def subtitle(self):
+        return self._subtitle_label.text()
 
-    @trend_color.setter
-    def trend_color(self, color):
-        self._trend_label.setStyleSheet(
-            f"color: {color}; font-size: 12px; font-weight: bold;"
-        )
+    @subtitle.setter
+    def subtitle(self, text):
+        self._subtitle_label.setText(text)
 
 
 # ============================================================================
@@ -113,12 +126,12 @@ class EmptyState(QWidget):
     空状态占位组件，用于列表/表格为空时的友好提示。
 
     参数:
-        icon (str): emoji 文本，如 "📭"
+        icon (str): Unicode 符号，如 "☰"（不再使用彩色 emoji）
         title (str): 标题文字
         subtitle (str): 副标题 / 提示文字
     """
 
-    def __init__(self, icon="📭", title="暂无数据", subtitle="",
+    def __init__(self, icon="", title="暂无数据", subtitle="",
                  parent=None):
         super().__init__(parent)
         self.setObjectName("EmptyState")
@@ -148,7 +161,6 @@ class EmptyState(QWidget):
         layout.addWidget(self._subtitle_label)
 
     # ---------- 属性接口 ----------
-
     @property
     def icon(self):
         return self._icon_label.text()
@@ -179,10 +191,10 @@ class EmptyState(QWidget):
 # ============================================================================
 
 _TOAST_COLORS = {
-    "info":    ("#1A1A2E", "#4A9ED9", "ℹ"),
-    "success": ("#1A1A2E", "#52C41A", "✓"),
-    "warning": ("#1A1A2E", "#F5A623", "⚠"),
-    "error":   ("#1A1A2E", "#E74C3C", "✗"),
+    "info":    ("#1A1A2E", "#4A9ED9", "\u2139"),
+    "success": ("#1A1A2E", "#52C41A", "\u2713"),
+    "warning": ("#1A1A2E", "#F5A623", "\u26A0"),
+    "error":   ("#1A1A2E", "#E74C3C", "\u2717"),
 }
 
 
@@ -262,16 +274,12 @@ class Toast(QWidget):
         self._fade_out.finished.connect(self.close)
 
     # ---------- 显示 ----------
-
     def show(self):
         """显示 Toast 并启动自动消失计时器。"""
         super().show()
         self._position_bottom_right()
         self._fade_in.start()
-
         QTimer.singleShot(self._duration, self._start_fade_out)
-
-    # ---------- 内部方法 ----------
 
     def _position_bottom_right(self):
         """将 Toast 定位到屏幕右下角。"""
@@ -287,12 +295,10 @@ class Toast(QWidget):
         self._fade_out.start()
 
     # ---------- 静态工厂 ----------
-
     @staticmethod
     def show_message(parent, message, duration=3000, type="info"):
         """
         便捷方法：创建并立即显示一条 Toast。
-
         示例:
             Toast.show_message(self, "保存成功", type="success")
         """

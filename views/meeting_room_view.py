@@ -393,7 +393,7 @@ class MeetingRoomView(QWidget):
             self._load_meeting_data()
             self._refresh_all()
             self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
-            self._timer_label.setText("⏱ 02:00")
+            # timer 由 _tick_timer 驱动，不再手动重置
         else:
             msg = resp.get("message", "未知错误") if isinstance(resp, dict) else (
                 "未连接" if not self.api_client else
@@ -410,7 +410,7 @@ class MeetingRoomView(QWidget):
         self._text_edit.clear()
         self._refresh_all()
         self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
-        self._timer_label.setText("⏱ 02:00")
+        # timer 由 _tick_timer 驱动，不再手动重置
 
     def _on_voice_input(self):
         QMessageBox.information(self, "语音输入", "语音输入功能将在后续版本中通过浏览器 WebRTC 实现。\n当前请使用文本输入。")

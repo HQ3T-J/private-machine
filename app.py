@@ -199,8 +199,8 @@ class Sidebar(QFrame):
         nav_items = [
             ("\u2630", "站会", PAGE_HOME),
             ("\u2713", "待办", PAGE_TODO),
-            ("\u25A0", "看板", PAGE_DASHBOARD),
-            ("\u2659", "团队", PAGE_TEAM),
+            ("\u25A3", "看板", PAGE_DASHBOARD),
+            ("\u263A", "团队", PAGE_TEAM),
             ("\u2699", "设置", PAGE_SETTINGS),
         ]
         for icon, label, idx in nav_items:
@@ -420,16 +420,6 @@ class MainWindow(QMainWindow):
         # 初始页面
         self._stack.setCurrentIndex(PAGE_HOME)
         self._sidebar.set_active(PAGE_HOME)
-
-        # ── 全局暗色背景 ──
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #0D1117;
-            }
-            #ContentStack {
-                background-color: #0D1117;
-            }
-        """)
 
     # ── 导航切换 ──
     def _on_navigate(self, page_index: int):
