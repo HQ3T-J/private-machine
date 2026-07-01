@@ -119,10 +119,13 @@ public class ActionItemController {
         } else {
             userRepo.findById(userId).ifPresent(item::setAssignee);
         }
+        if (body.containsKey("confirmed")) {
+            item.setConfirmed(Boolean.valueOf(body.get("confirmed").toString()));
+        }
         return ApiResponse.ok(repo.save(item));
     }
 
-    @DeleteMapping("/action-items/{id}")
+@DeleteMapping("/action-items/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         repo.deleteById(id);
         return ApiResponse.ok("已删除", null);
