@@ -54,6 +54,16 @@ public class ActionItemController {
         return ApiResponse.ok(items);
     }
 
+    @GetMapping("/action-items/team")
+    public ApiResponse<List<ActionItem>> listByTeam(@RequestParam Long teamId,
+                                                     @RequestParam(required = false) String status) {
+        if (status != null) {
+            return ApiResponse.ok(repo.findByTeamIdAndStatus(teamId,
+                ActionItem.ActionItemStatus.valueOf(status.toUpperCase())));
+        }
+        return ApiResponse.ok(repo.findByTeamId(teamId));
+    }
+
     @PostMapping("/action-items")
     public ApiResponse<ActionItem> create(@RequestAttribute("userId") String userId,
                                            @RequestBody Map<String, Object> body) {
@@ -72,10 +82,17 @@ public class ActionItemController {
             meetingRepo.findById(Long.valueOf(body.get("meetingId").toString())).ifPresent(item::setMeeting);
         }
         if (body.containsKey("status")) {
-            item.setStatus(ActionItem.ActionItemStatus.valueOf(((String) body.get("status")).toUpperCase()));
+            ActionItem.ActionItemStatus oldStatus = item.getStatus();
+            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
+                ((String) body.get("status")).toUpperCase());
+            item.setStatus(newStatus);
+            updateCompletedAt(item, oldStatus, newStatus);
         }
         if (body.containsKey("priority")) {
             item.setPriority(ActionItem.Priority.valueOf(((String) body.get("priority")).toUpperCase()));
+        }
+        if (body.containsKey("confirmed")) {
+            item.setConfirmed(Boolean.valueOf(body.get("confirmed").toString()));
         }
         return ApiResponse.ok(repo.save(item));
     }
@@ -88,7 +105,11 @@ public class ActionItemController {
         if (item == null) return ApiResponse.error(404, "待办不存在");
         if (body.containsKey("content")) item.setContent((String) body.get("content"));
         if (body.containsKey("status")) {
-            item.setStatus(ActionItem.ActionItemStatus.valueOf(((String) body.get("status")).toUpperCase()));
+            ActionItem.ActionItemStatus oldStatus = item.getStatus();
+            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
+                ((String) body.get("status")).toUpperCase());
+            item.setStatus(newStatus);
+            updateCompletedAt(item, oldStatus, newStatus);
         }
         if (body.containsKey("priority")) {
             item.setPriority(ActionItem.Priority.valueOf(((String) body.get("priority")).toUpperCase()));
@@ -131,7 +152,11 @@ public class ActionItemController {
             Long itemId = Long.valueOf(u.get("id").toString());
             ActionItem item = repo.findById(itemId).orElse(null);
             if (item == null) continue;
-            item.setStatus(ActionItem.ActionItemStatus.valueOf(((String) u.get("status")).toUpperCase()));
+            ActionItem.ActionItemStatus oldStatus = item.getStatus();
+            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
+                ((String) u.get("status")).toUpperCase());
+            item.setStatus(newStatus);
+            updateCompletedAt(item, oldStatus, newStatus);
             updated.add(repo.save(item));
         }
         return ApiResponse.ok(updated);
@@ -146,8 +171,10 @@ public class ActionItemController {
         if (item == null) return ApiResponse.error(404, "待办不存在");
         if (!status.matches("pending|in_progress|done|cancelled"))
             return ApiResponse.error(400, "无效状态: " + status);
-        item.setStatus(ActionItem.ActionItemStatus.valueOf(status.toUpperCase()));
-        if ("done".equals(status)) item.setCompletedAt(LocalDateTime.now());
+        ActionItem.ActionItemStatus oldStatus = item.getStatus();
+        ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(status.toUpperCase());
+        item.setStatus(newStatus);
+        updateCompletedAt(item, oldStatus, newStatus);
         repo.save(item);
         return ApiResponse.ok("状态已更新", Map.of("status", item.getStatus().name()));
     }
@@ -211,6 +238,15 @@ public class ActionItemController {
             return ApiResponse.ok(result);
         } catch (Exception e) {
             return ApiResponse.error(500, "AI 结果解析失败: " + e.getMessage());
+        }
+    }
+
+    private void updateCompletedAt(ActionItem item, ActionItem.ActionItemStatus oldStatus,
+                                    ActionItem.ActionItemStatus newStatus) {
+        if (newStatus == ActionItem.ActionItemStatus.DONE && oldStatus != ActionItem.ActionItemStatus.DONE) {
+            item.setCompletedAt(LocalDateTime.now());
+        } else if (newStatus != ActionItem.ActionItemStatus.DONE && oldStatus == ActionItem.ActionItemStatus.DONE) {
+            item.setCompletedAt(null);
         }
     }
 }

@@ -46,11 +46,12 @@ class TodoView(QWidget):
     def __init__(self, api_client=None, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self._current_status = None  # None = 全部
-        self._todos = []
+        self.title = "待办管理"
+        self._todos: list = []
+        self._current_status = None
         self._current_row = -1
+        self._is_team_view = False
         self._setup_ui()
-        self._apply_style()
 
     # ── UI 构建 ──
     def _setup_ui(self):
@@ -65,6 +66,16 @@ class TodoView(QWidget):
         tab_layout = QHBoxLayout(tab_bar)
         tab_layout.setContentsMargins(16, 8, 16, 8)
         tab_layout.setSpacing(4)
+
+        # 我的/团队 切换
+        self._view_toggle = QPushButton("🔒 我的")
+        self._view_toggle.setCheckable(True); self._view_toggle.setChecked(True)
+        self._view_toggle.setFixedHeight(30)
+        self._view_toggle.setStyleSheet("QPushButton{border:1px solid #555;border-radius:4px;padding:2px 8px;font-size:11px;} QPushButton:checked{border-color:#4A90D9;color:#4A90D9;}")
+        self._view_toggle.setCursor(Qt.PointingHandCursor)
+        self._view_toggle.clicked.connect(self._on_view_toggle)
+        tab_layout.addWidget(self._view_toggle)
+        tab_layout.addSpacing(12)
 
         self._tabs = {}
         self._tab_keys = ["all", "pending", "in_progress", "completed"]
@@ -188,11 +199,17 @@ class TodoView(QWidget):
         self._btn_transfer.setObjectName("btnTransfer")
         self._btn_transfer.setCursor(Qt.PointingHandCursor)
 
+        self._btn_confirm = QPushButton("✓ 确认待办")
+        self._btn_confirm.setObjectName("btnConfirm")
+        self._btn_confirm.setCursor(Qt.PointingHandCursor)
+        self._btn_confirm.clicked.connect(self._on_toggle_confirm)
+
         btn_layout.addWidget(self._btn_complete)
         btn_layout.addWidget(self._btn_progress)
         btn_layout.addWidget(self._btn_transfer)
 
         panel_layout.addLayout(btn_layout)
+        panel_layout.addWidget(self._btn_confirm)
         self._update_detail_panel_buttons(False)
 
     def _update_detail_panel_buttons(self, enabled: bool):
@@ -203,12 +220,25 @@ class TodoView(QWidget):
     # ── 数据加载 ──
     def activate(self):
         """页面激活时刷新数据。"""
-        if self.api_client:
-            self._todos = self.api_client.get_todos(self._current_status)
-        else:
+        self._load_todos()
+
+    def _load_todos(self):
+        if not self.api_client:
             self._todos = []
+        elif self._is_team_view:
+            teams = self.api_client.get_teams()
+            tid = teams[0].get("id") if teams else None
+            self._todos = self.api_client.get_team_todos(tid) if tid else []
+        else:
+            self._todos = self.api_client.get_todos(self._current_status)
         self._populate_table()
         self._update_tab_counts()
+
+    def _on_view_toggle(self):
+        self._is_team_view = not self._is_team_view
+        self._view_toggle.setText("👥 团队" if self._is_team_view else "🔒 我的")
+        self._current_status = None
+        self._load_todos()
 
     def _update_tab_counts(self):
         """根据实际数据更新 Tab 计数"""
@@ -289,7 +319,32 @@ class TodoView(QWidget):
             self._detail_fields["due"].setText(str(due)[:10] if due != "—" else "—")
             st = STATUS_LABELS.get(todo.get("status", ""), str(todo.get("status", "")))
             self._detail_fields["status"].setText(st)
+            # 完成时间
+            ct = todo.get("completedAt")
+            label = self._detail_fields.get("completedAt")
+            if label and ct:
+                label.setText(f"完成于 {str(ct)[:16]}")
+                label.setVisible(True)
+            elif label:
+                label.setVisible(False)
+            # 确认按钮
+            confirmed = todo.get("confirmed", False)
+            self._btn_confirm.setText("✓ 已确认" if confirmed else "⚠ 待确认")
+            self._btn_confirm.setStyleSheet(
+                f"QPushButton{{border:1px solid {'#238636' if confirmed else '#F5A623'};border-radius:4px;padding:4px 8px;font-size:11px;color:{'#FFF' if confirmed else '#F5A623'};background:{'#238636' if confirmed else 'transparent'};}}"
+            )
             self._update_detail_panel_buttons(True)
+
+    def _on_toggle_confirm(self):
+        if self._current_row < 0 or self._current_row >= len(self._todos):
+            return
+        todo = self._todos[self._current_row]
+        tid = todo.get("id")
+        new_confirmed = not todo.get("confirmed", False)
+        if self.api_client:
+            self.api_client.update_todo(str(tid), {"confirmed": new_confirmed})
+        todo["confirmed"] = new_confirmed
+        self._show_detail(self._current_row)
 
     # ── 状态变更 ──
     def _mark_status(self, new_status: str):

@@ -272,6 +272,12 @@ class APIClient:
         data = self._get("/api/todos/unfinished")
         return data if isinstance(data, list) else []
 
+    def get_team_todos(self, team_id, status: str = None) -> list:
+        url = f"/api/action-items/team?teamId={team_id}"
+        if status: url += f"&status={status}"
+        data = self._get(url)
+        return data if isinstance(data, list) else []
+
     def get_dashboard_kpi(self, team_id) -> Optional[dict]:
         return self._get(f"/api/dashboard/kpi?teamId={team_id}")
 

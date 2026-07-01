@@ -49,6 +49,10 @@ public class ActionItem {
 
     private LocalDateTime completedAt;
 
+    @Column(nullable = false)
+    private Boolean confirmed = false;
+
+
     public enum ActionItemStatus {
         PENDING, IN_PROGRESS, DONE, CANCELLED
     }
@@ -98,4 +102,6 @@ public class ActionItem {
 
     public LocalDateTime getCompletedAt() { return completedAt; }
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public Boolean getConfirmed() { return confirmed; }
+    public void setConfirmed(Boolean confirmed) { this.confirmed = confirmed; }
 }
