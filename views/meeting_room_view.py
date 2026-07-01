@@ -113,7 +113,13 @@ class MeetingRoomView(QWidget):
         result = self.api_client._get(f"/api/meetings/{mid}")
         if result and isinstance(result, dict):
             self._meeting_data = result
-            self._members = result.get("participants", [])
+        else:
+            # 会议不存在或已删除
+            self._meeting_data = {"id": mid, "status": "DELETED", "title": "已删除"}
+            self._members = []
+            self._speeches = []
+            QMessageBox.warning(self, "提示", f"站会 #{mid} 不存在或已被删除")
+            return
         speeches = self.api_client.get_speeches(str(mid))
         self._speeches = speeches if speeches else []
 

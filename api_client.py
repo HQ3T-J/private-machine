@@ -186,10 +186,10 @@ class APIClient:
     #  站会
     # ═══════════════════════════════════════════════
     def get_meetings(self, team_id) -> list:
-        online = self._get(f"/api/meetings?teamId={team_id}")
-        if online and isinstance(online, list):
-            return online
-        return []
+        if not team_id:
+            return []
+        data = self._get(f"/api/meetings?teamId={team_id}")
+        return data if isinstance(data, list) else []
 
     def create_meeting(self, team_id, sprint_no: str = None, title: str = None, participants: list = None) -> Optional[dict]:
         body = {"teamId": team_id}
