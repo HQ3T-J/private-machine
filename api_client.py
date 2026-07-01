@@ -265,20 +265,22 @@ class APIClient:
     # ═══════════════════════════════════════════════
     #  看板
     # ═══════════════════════════════════════════════
-    def get_dashboard_summary(self, team_id) -> Optional[dict]:
-        return self._get(f"/api/dashboard/summary?teamId={team_id}")
+    def get_dashboard_summary(self, team_id, sprint_no: str = None, date_from: str = None, date_to: str = None) -> Optional[dict]:
+        url = f"/api/dashboard/summary?teamId={team_id}"
+        if sprint_no: url += f"&sprintNo={sprint_no}"
+        if date_from: url += f"&dateFrom={date_from}"
+        if date_to: url += f"&dateTo={date_to}"
+        return self._get(url)
 
-    def get_dashboard_trend(self, team_id, trend_type="attendance") -> list:
-        if trend_type == "blocker":
-            path = f"/api/dashboard/blocker-distribution?teamId={team_id}"
-        else:
-            path = f"/api/dashboard/{trend_type}-trend?teamId={team_id}"
-        online = self._get(path)
-        return online if isinstance(online, list) else []
+    def get_dashboard_trend(self, team_id, trend_type="attendance", user_id: str = None) -> list:
+        path = f"/api/dashboard/{trend_type}-trend?teamId={team_id}"
+        if user_id: path += f"&userId={user_id}"
+        data = self._get(path)
+        return data if isinstance(data, list) else []
 
-    def get_member_ranking(self, team_id) -> list:
-        online = self._get(f"/api/dashboard/member-ranking?teamId={team_id}")
-        return online if isinstance(online, list) else []
+    def get_member_ranking(self, team_id, sort_by: str = "completionRate") -> list:
+        data = self._get(f"/api/dashboard/member-ranking?teamId={team_id}&sortBy={sort_by}")
+        return data if isinstance(data, list) else []
 
     # ═══ Phase2: 站会增强 ═══
     def paste_chat(self, meeting_id: str, text: str) -> Optional[dict]:
@@ -340,8 +342,14 @@ class APIClient:
         data = self._get(url)
         return data if isinstance(data, list) else []
 
-    def get_dashboard_kpi(self, team_id) -> Optional[dict]:
-        return self._get(f"/api/dashboard/kpi?teamId={team_id}")
+    def get_dashboard_kpi(self, team_id, sprint_no: str = None, date_from: str = None, date_to: str = None) -> Optional[dict]:
+        url = f"/api/dashboard/kpi?teamId={team_id}"
+        if sprint_no: url += f"&sprintNo={sprint_no}"
+        if date_from: url += f"&dateFrom={date_from}"
+        if date_to: url += f"&dateTo={date_to}"
+        return self._get(url)
 
-    def get_dashboard_trends(self, team_id) -> Optional[dict]:
-        return self._get(f"/api/dashboard/trends?teamId={team_id}")
+    def get_dashboard_trends(self, team_id, user_id: str = None) -> Optional[dict]:
+        url = f"/api/dashboard/trends?teamId={team_id}"
+        if user_id: url += f"&userId={user_id}"
+        return self._get(url)

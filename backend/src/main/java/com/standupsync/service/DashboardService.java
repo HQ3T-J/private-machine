@@ -27,12 +27,10 @@ public class DashboardService {
         this.memberRepo = memberRepo;
     }
 
-    public Map<String, Object> computeSummary(Long teamId, String sprintNo) {
+    public Map<String, Object> computeSummary(Long teamId, String sprintNo,
+                                               LocalDate dateFrom, LocalDate dateTo) {
         List<Meeting> meetings = meetingRepo.findByTeamIdOrderByCreatedAtDesc(teamId);
-        if (sprintNo != null) {
-            int sn = Integer.parseInt(sprintNo);
-            meetings = meetings.stream().filter(m -> m.getSprintNo() != null && m.getSprintNo() == sn).toList();
-        }
+        meetings = filterMeetings(meetings, sprintNo, dateFrom, dateTo);
         List<ActionItem> items = itemRepo.findByTeamId(teamId);
 
         long totalMeetings = meetings.size();
@@ -67,7 +65,8 @@ public class DashboardService {
         return result;
     }
 
-    public List<Map<String, Object>> computeAttendanceTrend(Long teamId, int limit) {
+    public List<Map<String, Object>> computeAttendanceTrend(Long teamId, int limit,
+                                                             String userId) {
         List<Meeting> meetings = meetingRepo.findByTeamIdOrderByCreatedAtDesc(teamId);
         if (meetings.size() > limit) meetings = meetings.subList(0, limit);
         Collections.reverse(meetings);
@@ -75,6 +74,9 @@ public class DashboardService {
         List<Map<String, Object>> trend = new ArrayList<>();
         for (Meeting m : meetings) {
             List<MeetingParticipant> parts = participantRepo.findByMeetingIdOrderBySpeechOrderAsc(m.getId());
+            if (userId != null) {
+                parts = parts.stream().filter(p -> userId.equals(p.getUserId())).toList();
+            }
             long attended = parts.stream().filter(p -> p.getHasSpoken()).count();
             double rate = parts.isEmpty() ? 0 : (double) attended / parts.size();
             Map<String, Object> point = new LinkedHashMap<>();
@@ -87,7 +89,8 @@ public class DashboardService {
         return trend;
     }
 
-    public List<Map<String, Object>> computeCompletionTrend(Long teamId, int limit) {
+    public List<Map<String, Object>> computeCompletionTrend(Long teamId, int limit,
+                                                             String userId) {
         List<Meeting> meetings = meetingRepo.findByTeamIdOrderByCreatedAtDesc(teamId);
         if (meetings.size() > limit) meetings = meetings.subList(0, limit);
         Collections.reverse(meetings);
@@ -95,6 +98,10 @@ public class DashboardService {
         List<Map<String, Object>> trend = new ArrayList<>();
         for (Meeting m : meetings) {
             List<ActionItem> items = itemRepo.findByMeetingId(m.getId());
+            if (userId != null) {
+                items = items.stream().filter(i ->
+                    i.getAssignee() != null && userId.equals(i.getAssignee().getId())).toList();
+            }
             long done = items.stream().filter(i -> i.getStatus() == ActionItem.ActionItemStatus.DONE).count();
             double rate = items.isEmpty() ? 0 : (double) done / items.size();
             Map<String, Object> point = new LinkedHashMap<>();
@@ -107,42 +114,32 @@ public class DashboardService {
         return trend;
     }
 
-    /**
-     * 每日完成趋势（移植自 Python completion-trend-daily）
-     * 按自然日统计待办创建数和完成数
-     */
     public List<Map<String, Object>> computeCompletionTrendDaily(Long teamId, int days) {
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(days);
-
         List<ActionItem> allItems = itemRepo.findByTeamId(teamId);
         List<Map<String, Object>> result = new ArrayList<>();
-
         LocalDate current = startDate;
         while (!current.isAfter(endDate)) {
             final LocalDate dayStart = current;
             final LocalDate dayEnd = current.plusDays(1);
-
             long created = allItems.stream()
                     .filter(i -> i.getCreatedAt() != null)
                     .filter(i -> {
                         LocalDate d = i.getCreatedAt().toLocalDate();
                         return !d.isBefore(dayStart) && d.isBefore(dayEnd);
                     }).count();
-
             long completed = allItems.stream()
                     .filter(i -> i.getCompletedAt() != null)
                     .filter(i -> {
                         LocalDate d = i.getCompletedAt().toLocalDate();
                         return !d.isBefore(dayStart) && d.isBefore(dayEnd);
                     }).count();
-
             Map<String, Object> point = new LinkedHashMap<>();
             point.put("date", dayStart.toString());
             point.put("totalCreated", created);
             point.put("totalCompleted", completed);
             result.add(point);
-
             current = current.plusDays(1);
         }
         return result;
@@ -212,9 +209,6 @@ public class DashboardService {
         return ranking;
     }
 
-    /**
-     * CSV 导出 — 会议列表
-     */
     public String exportMeetingsCsv(Long teamId) {
         List<Meeting> meetings = meetingRepo.findByTeamIdOrderByCreatedAtDesc(teamId);
         StringBuilder sb = new StringBuilder("ID,标题,Sprint,形式,状态,创建时间,结束时间\n");
@@ -230,9 +224,6 @@ public class DashboardService {
         return sb.toString();
     }
 
-    /**
-     * CSV 导出 — 待办列表
-     */
     public String exportActionItemsCsv(Long teamId) {
         List<ActionItem> items = itemRepo.findByTeamId(teamId);
         StringBuilder sb = new StringBuilder("ID,内容,责任人,状态,优先级,创建时间,完成时间\n");
@@ -246,6 +237,25 @@ public class DashboardService {
               .append(i.getCompletedAt() != null ? i.getCompletedAt() : "").append("\n");
         }
         return sb.toString();
+    }
+
+    // ── 辅助 ──
+
+    private List<Meeting> filterMeetings(List<Meeting> meetings, String sprintNo,
+                                          LocalDate dateFrom, LocalDate dateTo) {
+        if (sprintNo != null) {
+            int sn = Integer.parseInt(sprintNo);
+            meetings = meetings.stream().filter(m -> m.getSprintNo() != null && m.getSprintNo() == sn).toList();
+        }
+        if (dateFrom != null) {
+            meetings = meetings.stream().filter(m ->
+                m.getCreatedAt() != null && !m.getCreatedAt().toLocalDate().isBefore(dateFrom)).toList();
+        }
+        if (dateTo != null) {
+            meetings = meetings.stream().filter(m ->
+                m.getCreatedAt() != null && !m.getCreatedAt().toLocalDate().isAfter(dateTo)).toList();
+        }
+        return meetings;
     }
 
     private String categorize(String blocker) {

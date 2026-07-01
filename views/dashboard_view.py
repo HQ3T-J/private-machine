@@ -134,7 +134,7 @@ class DashboardView(QWidget):
         super().__init__(parent)
         self.api_client = api_client
         self._team_id = None
-        self._filters = {"sprint": None, "blocker_type": None}
+        self._filters = {"sprint": None, "blocker_type": None, "userId": None, "dateFrom": None, "dateTo": None, "sortBy": "completionRate"}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -152,13 +152,40 @@ class DashboardView(QWidget):
         hdr.addWidget(self._refresh_btn)
         layout.addLayout(hdr)
 
-        # ── Sprint 筛选 ──
+        # ── 筛选栏 ──
         fb = QHBoxLayout(); fb.setSpacing(10)
         fb.addWidget(QLabel("Sprint：")); fb.itemAt(fb.count()-1).widget().setStyleSheet("font-size:13px;")
         self._sprint_combo = QComboBox(); self._sprint_combo.addItem("全部")
-        self._sprint_combo.setFixedWidth(140); self._sprint_combo.setStyleSheet(_combo_style())
-        self._sprint_combo.currentTextChanged.connect(self._on_sprint_changed)
-        fb.addWidget(self._sprint_combo); fb.addStretch()
+        self._sprint_combo.setFixedWidth(120); self._sprint_combo.setStyleSheet(_combo_style())
+        self._sprint_combo.currentTextChanged.connect(self._on_filter_changed)
+        fb.addWidget(self._sprint_combo)
+
+        fb.addWidget(QLabel("阻碍：")); fb.itemAt(fb.count()-1).widget().setStyleSheet("font-size:13px;")
+        self._blocker_combo = QComboBox()
+        self._blocker_combo.addItems(["全部","技术","资源","沟通","其他"])
+        self._blocker_combo.setFixedWidth(100); self._blocker_combo.setStyleSheet(_combo_style())
+        self._blocker_combo.currentTextChanged.connect(self._on_filter_changed)
+        fb.addWidget(self._blocker_combo)
+
+        fb.addWidget(QLabel("成员：")); fb.itemAt(fb.count()-1).widget().setStyleSheet("font-size:13px;")
+        self._member_combo = QComboBox(); self._member_combo.addItem("全部")
+        self._member_combo.setFixedWidth(120); self._member_combo.setStyleSheet(_combo_style())
+        self._member_combo.currentTextChanged.connect(self._on_filter_changed)
+        fb.addWidget(self._member_combo)
+
+        fb.addWidget(QLabel("时间：")); fb.itemAt(fb.count()-1).widget().setStyleSheet("font-size:13px;")
+        self._time_combo = QComboBox()
+        self._time_combo.addItems(["全部","本周","本月","近7天","近30天"])
+        self._time_combo.setFixedWidth(100); self._time_combo.setStyleSheet(_combo_style())
+        self._time_combo.currentTextChanged.connect(self._on_filter_changed)
+        fb.addWidget(self._time_combo)
+
+        self._reset_btn = QPushButton("🔄 重置")
+        self._reset_btn.setStyleSheet("QPushButton{background:transparent;color:#E74C3C;border:1px solid #E74C3C;border-radius:4px;padding:4px 10px;font-size:11px;}")
+        self._reset_btn.setCursor(Qt.PointingHandCursor)
+        self._reset_btn.clicked.connect(self._on_reset_filters)
+        fb.addWidget(self._reset_btn)
+        fb.addStretch()
         layout.addLayout(fb)
 
         # ── 标签行 ──
@@ -213,9 +240,20 @@ class DashboardView(QWidget):
             if teams:
                 self._team_id = teams[0].get("id")
                 self._load_sprints()
+                self._load_members()
                 self._load_all_data()
                 return
         self._clear_all()
+
+    def _load_members(self):
+        if not self._team_id: return
+        self._member_combo.blockSignals(True); self._member_combo.clear(); self._member_combo.addItem("全部")
+        team_data = self.api_client._get(f"/api/teams/{self._team_id}")
+        if team_data:
+            for m in team_data.get("members", []):
+                name = m.get("name") or m.get("username") or m.get("user_id", "?")
+                self._member_combo.addItem(name, m.get("user_id"))
+        self._member_combo.blockSignals(False)
 
     def _load_sprints(self):
         if not self._team_id: return
@@ -230,43 +268,32 @@ class DashboardView(QWidget):
 
     def _load_all_data(self):
         if not self._team_id or not self.api_client: return
-        c = self.api_client
-        sprint = self._filters.get("sprint")
+        c = self.api_client; f = self._filters
+        sprint = f.get("sprint"); sprint_str = str(sprint) if sprint else None
 
-        # Summary
-        s = c.get_dashboard_summary(self._team_id) or {}
+        # Summary — 用后端 dateFrom/dateTo
+        s = c.get_dashboard_summary(self._team_id, sprint_str, f.get("dateFrom"), f.get("dateTo")) or {}
         self._cards["meetings"].update_value(str(s.get("totalMeetings",0)))
-
-        # 出勤/完成率/阻碍 — 全量统计（不受 sprint 影响太大）
         ar = s.get("avgAttendanceRate",0)
         self._cards["attendance"].update_value(f"{int(ar*100)}%" if isinstance(ar,float) and ar<=1 else f"{ar}%")
         cr = s.get("completionRate",0)
         self._cards["completion"].update_value(f"{int(cr*100)}%" if isinstance(cr,float) and cr<=1 else f"{cr}%")
         self._cards["blockers"].update_value(str(s.get("activeBlockers",0)))
 
-        # Trends — 加载全量，按 sprint 过滤
-        all_meetings = c.get_meetings(self._team_id) or []
-        all_items = c.get_todos() or []
-
-        if sprint is not None:
-            filtered_meetings = [m for m in all_meetings if m.get("sprintNo") == sprint]
-            filtered_items = [i for i in all_items if _item_in_sprint(i, filtered_meetings, sprint)]
-        else:
-            filtered_meetings = all_meetings
-            filtered_items = all_items
-
-        # 构建趋势数据（从过滤后的 meetings 计算）
-        att_data = _build_trend_from_meetings(filtered_meetings, "attendance")
-        comp_data = _build_trend_from_meetings(filtered_meetings, "completion", filtered_items)
+        # Trends — 用后端 userId
+        uid = f.get("userId")
+        att_data = c.get_dashboard_trend(self._team_id, "attendance", uid)
+        comp_data = c.get_dashboard_trend(self._team_id, "completion", uid)
         self._trend_att.set_data(att_data)
         self._trend_comp.set_data(comp_data)
 
-        # Blocker distribution — 从发言中按 sprint 过滤统计
-        blocker_data = _build_blocker_dist(filtered_meetings, self.api_client)
+        # Blocker — 用后端 blockerType
+        bt = _BLOCKER_MAP.get(f.get("blocker_type")) if f.get("blocker_type") else None
+        blocker_data = c.get_dashboard_blocker(self._team_id, bt)
         self._blocker.set_data(blocker_data)
 
-        # Ranking — 从过滤后的 items 计算
-        ranking = _build_ranking(filtered_items, self.api_client)
+        # Ranking — 用后端 sortBy
+        ranking = c.get_member_ranking(self._team_id, f.get("sortBy", "completionRate"))
         self._rank_table.setRowCount(len(ranking))
         for i, m in enumerate(ranking):
             ri = QTableWidgetItem(str(i+1)); ri.setTextAlignment(Qt.AlignCenter)
@@ -290,12 +317,45 @@ class DashboardView(QWidget):
         self._sprint_combo.blockSignals(False)
 
     # ── Sprint 筛选 ──
-    def _on_sprint_changed(self, text):
-        if text == "全部": self._filters["sprint"] = None
+    def _on_filter_changed(self, _text=None):
+        # Sprint
+        s = self._sprint_combo.currentText()
+        if s == "全部": self._filters["sprint"] = None
         else:
-            try: self._filters["sprint"] = int(text.split("#")[1])
+            try: self._filters["sprint"] = int(s.split("#")[1])
             except: self._filters["sprint"] = None
+        # Blocker type
+        b = self._blocker_combo.currentText()
+        self._filters["blocker_type"] = None if b == "全部" else b
+        # Member
+        self._filters["userId"] = self._member_combo.currentData()  # None=全部
+        # Time range
+        from datetime import date, timedelta
+        today = date.today()
+        t = self._time_combo.currentText()
+        if t == "本周":
+            start = today - timedelta(days=today.weekday())
+            self._filters["dateFrom"] = start.isoformat()
+            self._filters["dateTo"] = today.isoformat()
+        elif t == "本月":
+            self._filters["dateFrom"] = today.replace(day=1).isoformat()
+            self._filters["dateTo"] = today.isoformat()
+        elif t == "近7天":
+            self._filters["dateFrom"] = (today - timedelta(days=6)).isoformat()
+            self._filters["dateTo"] = today.isoformat()
+        elif t == "近30天":
+            self._filters["dateFrom"] = (today - timedelta(days=29)).isoformat()
+            self._filters["dateTo"] = today.isoformat()
+        else:
+            self._filters["dateFrom"] = self._filters["dateTo"] = None
         self._load_all_data()
+        self._sync_tags()
+
+    def _on_reset_filters(self):
+        self._sprint_combo.setCurrentIndex(0)
+        self._blocker_combo.setCurrentIndex(0)
+        self._member_combo.setCurrentIndex(0)
+        self._time_combo.setCurrentIndex(0)
 
     def _sync_tags(self): pass  # 简化：按需实现标签行
 
