@@ -136,12 +136,11 @@ class HomeView(QWidget):
         layout.addWidget(self.table, 1)
 
     def _card_style(self):
-        return ""  # 由全局 StatCard QSS 控制
+        return "border-radius: 10px; padding: 18px;"
 
     def _create_active_card(self):
         card = QFrame()
         card.setObjectName("StatCard")
-        card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
         cl = QVBoxLayout(card)
         cl.setContentsMargins(18, 14, 18, 14)
@@ -178,7 +177,6 @@ class HomeView(QWidget):
     def _create_stats_card(self):
         card = QFrame()
         card.setObjectName("StatCard")
-        card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
         cl = QVBoxLayout(card)
         cl.setContentsMargins(18, 14, 18, 14)
