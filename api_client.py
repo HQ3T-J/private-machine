@@ -118,8 +118,11 @@ class APIClient:
             return fallback
         try:
             r = requests.post(f"{BASE_URL}{path}", json=body, headers=self._headers(), timeout=5)
+            if r.status_code != 200:
+                return r.json()
             return r.json()
-        except Exception:
+        except Exception as e:
+            print(f"[APIClient._post] Error: {e}")
             return fallback
 
     def _parse_error(self, resp) -> str:

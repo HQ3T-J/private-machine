@@ -389,7 +389,10 @@ class MeetingRoomView(QWidget):
             self._timer_seconds = self._meeting_data.get("countdownSeconds", 900) if self._meeting_data else 900
             self._timer_label.setText("⏱ 02:00")
         else:
-            msg = resp.get("message", "未知错误") if isinstance(resp, dict) else "后端无响应"
+            msg = resp.get("message", "未知错误") if isinstance(resp, dict) else (
+                "未连接" if not self.api_client else
+                ("不在线" if self.api_client and not self.api_client.online else
+                 f"请求异常 (mid={self._meeting_id})"))
             QMessageBox.warning(self, "提交失败", msg)
 
         self._submit_btn.setEnabled(True)
