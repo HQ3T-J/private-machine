@@ -94,7 +94,7 @@ class SidebarButton(QFrame):
         self.page_index = page_index
         self._active = False
         self._theme = "dark"
-        self.setFixedHeight(36)
+        self.setFixedHeight(40)
         self.setCursor(Qt.PointingHandCursor)
 
         layout = QHBoxLayout(self)
@@ -181,7 +181,7 @@ class Sidebar(QFrame):
         # ── Logo ──
         logo_label = QLabel("StandupSync")
         logo_label.setObjectName("SidebarLogo")
-        logo_label.setFixedHeight(56)
+        logo_label.setFixedHeight(60)
         logo_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         logo_label.setStyleSheet(
             "color: #4A9ED9; font-size: 18px; font-weight: bold; "
@@ -221,7 +221,7 @@ class Sidebar(QFrame):
         # ── 用户区域 ──
         user_frame = QFrame()
         user_frame.setObjectName("SidebarUser")
-        user_frame.setFixedHeight(64)
+        user_frame.setFixedHeight(68)
         user_layout = QHBoxLayout(user_frame)
         user_layout.setContentsMargins(12, 10, 12, 10)
         user_layout.setSpacing(10)
@@ -346,8 +346,8 @@ class MainWindow(QMainWindow):
                  api_client=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("StandupSync")
-        self.setMinimumSize(960, 680)
-        self.resize(1200, 780)
+        self.setMinimumSize(1024, 720)
+        self.resize(1280, 820)
 
         self._username = username
         self._role = role
