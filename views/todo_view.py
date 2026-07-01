@@ -245,6 +245,7 @@ class TodoView(QWidget):
         counts = {"all": len(self._todos), "pending": 0, "in_progress": 0, "completed": 0}
         for t in self._todos:
             s = t.get("status", "")
+            s = {"PENDING":"pending","IN_PROGRESS":"in_progress","DONE":"completed","CANCELLED":"completed"}.get(s, s.lower())
             if s in counts: counts[s] += 1
         for key in self._tab_keys:
             if key in self._tabs:
