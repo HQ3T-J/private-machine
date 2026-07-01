@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
     QSizePolicy, QSpacerItem, QMessageBox, QDialog,
-    QLineEdit, QFormLayout, QDialogButtonBox
+    QLineEdit, QFormLayout, QDialogButtonBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -85,6 +85,12 @@ class HomeView(QWidget):
         self._team_label = QLabel("")
         self._team_label.setStyleSheet("font-size: 13px; color: #8E8E9E;")
         header_row.addWidget(self._team_label)
+
+        self._team_combo = QComboBox()
+        self._team_combo.setFixedWidth(160)
+        self._team_combo.setStyleSheet("QComboBox{border-radius:4px;padding:2px 6px;font-size:12px;}")
+        self._team_combo.currentIndexChanged.connect(self._on_team_changed)
+        header_row.addWidget(self._team_combo)
 
         refresh_btn = QPushButton("刷新")
         refresh_btn.setStyleSheet("""
@@ -227,16 +233,31 @@ class HomeView(QWidget):
         if not self.api_client:
             return
         self._teams = self.api_client.get_teams() or []
+
+        self._team_combo.blockSignals(True)
+        self._team_combo.clear()
+        for t in self._teams:
+            self._team_combo.addItem(t.get("name", f"Team #{t['id']}"), t.get("id"))
+        self._team_combo.blockSignals(False)
+
         if self._teams:
-            self._current_team_id = self._teams[0].get("id")
-            name = self._teams[0].get("name", "")
-            self._team_label.setText(f"团队: {name}")
+            self._current_team_id = self._team_combo.currentData() or self._teams[0].get("id")
             self._create_btn.setVisible(True)
         else:
             self._team_label.setText("(暂无团队)")
             self._current_team_id = None
             self._create_btn.setVisible(False)
 
+        if self._current_team_id:
+            self._meetings = self.api_client.get_meetings(self._current_team_id) or []
+            self._refresh_table()
+            self._refresh_cards()
+            self._load_stats()
+
+    def _on_team_changed(self, _idx):
+        if self._team_combo.count() == 0:
+            return
+        self._current_team_id = self._team_combo.currentData()
         if self._current_team_id:
             self._meetings = self.api_client.get_meetings(self._current_team_id) or []
             self._refresh_table()
