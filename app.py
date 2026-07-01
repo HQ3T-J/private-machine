@@ -441,14 +441,14 @@ class MainWindow(QMainWindow):
 
     def _on_theme_changed(self, theme: str):
         """切换全局主题"""
-        print(f"[MainWindow] Theme changed to: {theme}")
         from theme import DARK_STYLE, LIGHT_STYLE
+        from PySide6.QtWidgets import QMessageBox
         style = LIGHT_STYLE if theme == "light" else DARK_STYLE
         app = QApplication.instance()
         app.setStyleSheet(style)
         app.processEvents()
         self._sidebar.set_theme(theme)
-        print(f"[MainWindow] QSS applied, len={len(style)}")
+        QMessageBox.information(self, "主题已切换", f"已应用{theme}主题 ({len(style)} bytes)")
 
     def _on_enter_meeting_room(self, meeting_id, meeting_data=None):
         """从首页进入站会室"""
