@@ -1,10 +1,12 @@
 # api_client.py — API 客户端
 import requests
 import os
+import json
 from typing import Optional
 
 # 可配置：环境变量 > 默认值
 BASE_URL = os.environ.get("STANDUPSYNC_API", "http://localhost:8080")
+TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".standupsync_session.json")
 
 
 class APIClient:
@@ -26,6 +28,63 @@ class APIClient:
             cls._instance._online = None
         return cls._instance
 
+    # ═══ Token 持久化 ═══
+    @staticmethod
+    def load_session() -> Optional[dict]:
+        """从本地文件加载会话(token+user)，用于自动登录"""
+        try:
+            if os.path.exists(TOKEN_FILE):
+                with open(TOKEN_FILE, "r") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return None
+
+    def save_session(self, remember: bool = True):
+        """保存会话到本地文件"""
+        if not remember or not self.token:
+            return
+        try:
+            with open(TOKEN_FILE, "w") as f:
+                json.dump({
+                    "token": self.token,
+                    "userId": self.user_id,
+                    "username": self.username,
+                    "role": self.role,
+                }, f)
+        except Exception:
+            pass
+
+    @staticmethod
+    def clear_session():
+        """删除本地会话文件(退出登录时调用)"""
+        try:
+            if os.path.exists(TOKEN_FILE):
+                os.remove(TOKEN_FILE)
+        except Exception:
+            pass
+
+    def try_auto_login(self) -> bool:
+        """尝试用已保存的 token 自动登录"""
+        session = self.load_session()
+        if not session or not session.get("token"):
+            return False
+        self.token = session["token"]
+        self.user_id = session.get("userId")
+        self.username = session.get("username", "")
+        self.role = session.get("role", "")
+        # 验证 token 是否还有效
+        profile = self.get_profile()
+        if profile:
+            self.username = profile.get("username", self.username)
+            self.role = profile.get("role", self.role)
+            return True
+        # token 过期，清除
+        self.token = None
+        self.clear_session()
+        return False
+
+    # ═══ 基础 ═══
     @property
     def online(self) -> bool:
         if self._online is None:

@@ -73,6 +73,8 @@ class SettingsView(QWidget):
         reply = QMessageBox.question(self, "确认", "确定要退出登录吗？",
                                       QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
+            if self.api_client:
+                self.api_client.clear_session()
             QApplication.instance().quit()
 
     def _setup_ui(self):

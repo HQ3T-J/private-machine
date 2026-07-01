@@ -75,6 +75,12 @@ class LoginWindow(QDialog):
         self._login_pass.setMinimumHeight(40); l.addWidget(self._login_pass)
         self._login_pass.returnPressed.connect(self._on_login)
 
+        from PySide6.QtWidgets import QCheckBox
+        self._remember_cb = QCheckBox("记住我（下次自动登录）")
+        self._remember_cb.setStyleSheet("color:#8E8E9E;font-size:12px;")
+        self._remember_cb.setChecked(True)
+        l.addWidget(self._remember_cb)
+
         self._login_error = QLabel(""); self._login_error.setObjectName("error_label")
         self._login_error.setAlignment(Qt.AlignCenter); l.addWidget(self._login_error)
 
@@ -154,6 +160,8 @@ class LoginWindow(QDialog):
                 self.api_client = client
                 self.username = client.username
                 self.role = client.role or "DEVELOPER"
+                if self._remember_cb.isChecked():
+                    client.save_session(remember=True)
                 self.accept()
             elif not client.online:
                 self._login_error.setText("无法连接到服务器 (localhost:8080)")
@@ -208,6 +216,7 @@ class LoginWindow(QDialog):
                 self.api_client = client
                 self.username = client.username
                 self.role = client.role or "DEVELOPER"
+                client.save_session(remember=True)
                 self.accept()
                 return
 
