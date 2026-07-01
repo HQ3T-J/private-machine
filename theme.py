@@ -82,7 +82,7 @@ QFrame#VideoPanel { background-color: #161B22; border-radius: 8px; border: 1px s
 QFrame#VideoSlot { background-color: #0D1117; border-radius: 6px; border: 1px solid #30363D; }
 QFrame#AIPreview { background-color: #0D1117; border-radius: 4px; }
 QFrame#ApplyStatus { background-color: #2A2A1A; border-radius: 4px; }
-QFrame#StatCard { background-color: #161B22; border-radius: 10px; }
+QFrame#StatCard { background-color: #161B22; border-radius: 10px; padding: 18px; }
 QTextEdit#MeetingInput { background-color: #0D1117; border-radius: 8px; border: 1px solid #30363D; }
 """
 
@@ -209,6 +209,6 @@ QFrame#VideoPanel { background-color: #FFFFFF; border-radius: 8px; border: 1px s
 QFrame#VideoSlot { background-color: #F4F6F8; border-radius: 6px; border: 1px solid #E5E5E5; }
 QFrame#AIPreview { background-color: #F4F6F8; border-radius: 4px; }
 QFrame#ApplyStatus { background-color: #FFF8E1; border-radius: 4px; }
-QFrame#StatCard { background-color: #FFFFFF; border-radius: 10px; }
 QTextEdit#MeetingInput { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
+QFrame#StatCard { background-color: #FFFFFF; border-radius: 10px; padding: 18px; }
 """

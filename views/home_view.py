@@ -140,6 +140,7 @@ class HomeView(QWidget):
 
     def _create_active_card(self):
         card = QFrame()
+        card.setObjectName("StatCard")
         card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
         cl = QVBoxLayout(card)
@@ -176,6 +177,7 @@ class HomeView(QWidget):
 
     def _create_stats_card(self):
         card = QFrame()
+        card.setObjectName("StatCard")
         card.setStyleSheet(self._card_style())
         card.setMinimumHeight(120)
         cl = QVBoxLayout(card)
