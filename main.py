@@ -7,20 +7,19 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from theme import DARK_STYLE
+from theme import DARK_STYLE, LIGHT_STYLE
 
 
 def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
-    app.setStyleSheet(DARK_STYLE)
+    app.setStyleSheet(LIGHT_STYLE)
 
     # ═══ 尝试自动登录 ═══
     from api_client import APIClient
     client = APIClient()
 
     if client.try_auto_login():
-        # Token 有效，跳过登录界面
         from app import MainWindow
         window = MainWindow(
             username=client.username or "",
