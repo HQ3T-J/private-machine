@@ -17,16 +17,11 @@ class LoginWindow(QDialog):
         self.role = ""
         self.setWindowTitle("StandupSync - 登录")
         self.setFixedSize(420, 460)
+        self.setObjectName("LoginWindow")
         self.setStyleSheet("""
-            QLineEdit {
-                border-radius: 6px; padding: 10px 12px; font-size: 14px;
-                border: 1px solid #555; background: #0D1117; color: #C0C0D0;
-            }
+            QLineEdit { border-radius: 6px; padding: 10px 12px; font-size: 14px; }
             QLineEdit:focus { border: 1px solid #4A90D9; }
-            QPushButton#action_btn {
-                background-color: #4A90D9; color: #FFF; border: none;
-                border-radius: 8px; font-size: 15px; font-weight: bold;
-            }
+            QPushButton#action_btn { background-color: #4A90D9; color: #FFF; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; }
             QPushButton#action_btn:hover { background-color: #5BA0E9; }
             QPushButton#action_btn:pressed { background-color: #3A80C9; }
             QPushButton#action_btn:disabled { background-color: #3A5A7A; }

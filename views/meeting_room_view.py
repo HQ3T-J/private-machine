@@ -39,7 +39,7 @@ class VideoPanel(QFrame):
         self._slots_layout.setSpacing(8)
         layout.addLayout(self._slots_layout)
 
-        self.setStyleSheet("#VideoPanel{background:#161B22;border-radius:8px;border:1px solid #30363D;}")
+        self.setObjectName("VideoPanel")
 
     def update_participants(self, members, video_users=None):
         """更新视频槽位"""
@@ -56,7 +56,7 @@ class VideoPanel(QFrame):
 
             slot = QFrame()
             slot.setFixedSize(140, 100)
-            slot.setStyleSheet("QFrame{background:#0D1117;border-radius:6px;border:1px solid #30363D;}")
+            slot.setObjectName("VideoSlot")
             sl = QVBoxLayout(slot)
             sl.setContentsMargins(4, 4, 4, 4)
 
@@ -196,7 +196,7 @@ class MeetingRoomView(QWidget):
 
     def _create_member_panel(self):
         panel = QFrame()
-        panel.setStyleSheet("QFrame{background:#161B22;border-radius:8px;}")
+        panel.setObjectName("MemberPanel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
@@ -219,7 +219,7 @@ class MeetingRoomView(QWidget):
 
     def _create_speech_panel(self):
         panel = QFrame()
-        panel.setStyleSheet("QFrame{background:#161B22;border-radius:8px;}")
+        panel.setObjectName("MemberPanel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
@@ -231,7 +231,7 @@ class MeetingRoomView(QWidget):
 
         # AI 解析结果预览
         self._ai_preview = QLabel("")
-        self._ai_preview.setStyleSheet("font-size: 11px; color: #52C41A; padding: 4px 8px; background:#0D1117; border-radius:4px;")
+        self._ai_preview.setObjectName("AIPreview")
         self._ai_preview.setWordWrap(True)
         self._ai_preview.setVisible(False)
         layout.addWidget(self._ai_preview)
@@ -243,7 +243,7 @@ class MeetingRoomView(QWidget):
 
         self._text_edit = QTextEdit()
         self._text_edit.setPlaceholderText("描述你的工作进展，AI 会自动分类为 昨天/今天/阻碍\n如: 昨天修了登录bug，今天做dashboard，需要等review")
-        self._text_edit.setStyleSheet("QTextEdit{border-radius:8px;padding:10px;font-size:13px;background:#0D1117;border:1px solid #30363D;}")
+        self._text_edit.setObjectName("MeetingInput")
         self._text_edit.setMinimumHeight(100)
         layout.addWidget(self._text_edit)
 
@@ -283,7 +283,7 @@ class MeetingRoomView(QWidget):
 
     def _create_completed_panel(self):
         panel = QFrame()
-        panel.setStyleSheet("QFrame{background:#161B22;border-radius:8px;}")
+        panel.setObjectName("MemberPanel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(4)

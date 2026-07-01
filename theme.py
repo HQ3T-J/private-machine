@@ -73,6 +73,17 @@ QListWidget, QTreeWidget { background-color: #16213E; color: #FFFFFF; border: 1p
 QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #0F3460; color: #4A9ED9; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #1E2D50; }
+
+/* ── 自定义面板 ── */
+QFrame#Sidebar { background-color: #1A1A2E; border-right: 1px solid #2A2A4A; }
+QFrame#Sidebar QPushButton { background: transparent; text-align: left; }
+QFrame#MemberPanel, QFrame#SpeechPanel, QFrame#ApprovalPanel { background-color: #161B22; border-radius: 8px; }
+QFrame#VideoPanel { background-color: #161B22; border-radius: 8px; border: 1px solid #30363D; }
+QFrame#VideoSlot { background-color: #0D1117; border-radius: 6px; border: 1px solid #30363D; }
+QFrame#AIPreview { background-color: #0D1117; border-radius: 4px; }
+QFrame#ApplyStatus { background-color: #2A2A1A; border-radius: 4px; }
+QFrame#StatCard { background-color: #161B22; border-radius: 10px; }
+QTextEdit#MeetingInput { background-color: #0D1117; border-radius: 8px; border: 1px solid #30363D; }
 """
 
 LIGHT_STYLE = """
@@ -189,4 +200,15 @@ QListWidget, QTreeWidget { background-color: #FFFFFF; color: #262626; border: 1p
 QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #E6F7FF; color: #1890FF; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #E6F7FF; }
+
+/* ── 自定义面板 ── */
+QFrame#Sidebar { background-color: #FFFFFF; border-right: 1px solid #E5E5E5; }
+QFrame#Sidebar QPushButton { background: transparent; text-align: left; }
+QFrame#MemberPanel, QFrame#SpeechPanel, QFrame#ApprovalPanel { background-color: #FFFFFF; border-radius: 8px; }
+QFrame#VideoPanel { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
+QFrame#VideoSlot { background-color: #F4F6F8; border-radius: 6px; border: 1px solid #E5E5E5; }
+QFrame#AIPreview { background-color: #F4F6F8; border-radius: 4px; }
+QFrame#ApplyStatus { background-color: #FFF8E1; border-radius: 4px; }
+QFrame#StatCard { background-color: #FFFFFF; border-radius: 10px; }
+QTextEdit#MeetingInput { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #E5E5E5; }
 """

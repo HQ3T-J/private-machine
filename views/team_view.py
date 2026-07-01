@@ -189,7 +189,8 @@ class TeamView(QWidget):
 
         # ── 我的申请状态 ──
         self._app_status_label = QLabel("")
-        self._app_status_label.setStyleSheet("font-size:12px;color:#F5A623;padding:4px 8px;background:#2A2A1A;border-radius:4px;")
+        self._app_status_label.setObjectName("ApplyStatus")
+        self._app_status_label.setStyleSheet("font-size:12px;color:#F5A623;padding:4px 8px;")
         self._app_status_label.setVisible(False)
         layout.addWidget(self._app_status_label)
 
@@ -215,7 +216,7 @@ class TeamView(QWidget):
         splitter = QSplitter(Qt.Horizontal)
 
         # 左：成员列表
-        left = QFrame(); left.setStyleSheet("QFrame{background:#161B22;border-radius:8px;}")
+        left = QFrame(); left.setObjectName("MemberPanel")
         ll = QVBoxLayout(left); ll.setContentsMargins(10, 8, 10, 8)
         ll.addWidget(QLabel("👥 成员列表"))
         ll.itemAt(0).widget().setStyleSheet("font-size:13px;font-weight:bold;")
@@ -237,7 +238,7 @@ class TeamView(QWidget):
 
         # 右：审批面板
         right = QFrame(); right.setObjectName("ApprovalPanel")
-        right.setStyleSheet("#ApprovalPanel{background:#161B22;border-radius:8px;}")
+        right.setObjectName("ApprovalPanel")
         rl = QVBoxLayout(right); rl.setContentsMargins(10, 8, 10, 8)
         rl.addWidget(QLabel("📋 入团申请"))
         rl.itemAt(0).widget().setStyleSheet("font-size:13px;font-weight:bold;")

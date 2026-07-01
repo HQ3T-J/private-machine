@@ -192,7 +192,7 @@ class Sidebar(QFrame):
         # ── 分割线 ──
         sep1 = QFrame()
         sep1.setFrameShape(QFrame.HLine)
-        sep1.setStyleSheet("background-color: #2A2A4A; max-height: 1px; margin: 0 12px;")
+        sep1.setStyleSheet("max-height: 1px; margin: 0 12px;")
         layout.addWidget(sep1)
 
         # ── 导航按钮（使用固定宽度图标区，确保文字对齐）──
@@ -215,7 +215,7 @@ class Sidebar(QFrame):
         # ── 分割线 ──
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("background-color: #2A2A4A; max-height: 1px; margin: 0 12px;")
+        sep2.setStyleSheet("max-height: 1px; margin: 0 12px;")
         layout.addWidget(sep2)
 
         # ── 用户区域 ──
@@ -261,12 +261,7 @@ class Sidebar(QFrame):
         layout.addWidget(user_frame)
 
         # ── 整体样式 ──
-        self.setStyleSheet("""
-            #Sidebar {
-                background-color: #1A1A2E;
-                border-right: 1px solid #2A2A4A;
-            }
-        """)
+        self.setObjectName("Sidebar")
 
     # ── 身份权限控制 ──
     def _apply_identity_rules(self):

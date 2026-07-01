@@ -136,7 +136,7 @@ class HomeView(QWidget):
         layout.addWidget(self.table, 1)
 
     def _card_style(self):
-        return "border-radius: 10px; padding: 18px;"
+        return ""  # 由全局 StatCard QSS 控制
 
     def _create_active_card(self):
         card = QFrame()

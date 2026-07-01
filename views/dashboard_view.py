@@ -306,7 +306,7 @@ class DashboardView(QWidget):
             ri2 = QTableWidgetItem(f"{int(rt)}%"); ri2.setTextAlignment(Qt.AlignCenter)
             self._rank_table.setItem(i,3,ri2)
             pb = QProgressBar(); pb.setRange(0,100); pb.setValue(int(rt)); pb.setTextVisible(False)
-            pb.setStyleSheet("QProgressBar{border:none;border-radius:4px;background:#2A2A4A;height:8px;} QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}")
+            pb.setStyleSheet("QProgressBar{border:none;border-radius:4px;height:8px;} QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}")
             self._rank_table.setCellWidget(i,4,pb)
 
     def _clear_all(self):
