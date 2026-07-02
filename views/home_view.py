@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QFormLayout, QDialogButtonBox, QComboBox
 )
 from PySide6.QtCore import Qt, Signal
-from widgets import EmptyState
+from widgets import EmptyState, LoadingOverlay
 
 
 class CreateMeetingDialog(QDialog):
@@ -229,7 +229,12 @@ class HomeView(QWidget):
 
     def _load_data(self):
         if not self.api_client:
+            self._show_error("未连接到服务器")
             return
+        if not self.api_client.online:
+            self._show_error("服务器离线")
+            return
+
         self._teams = self.api_client.get_teams() or []
 
         self._team_combo.blockSignals(True)
@@ -383,3 +388,11 @@ class HomeView(QWidget):
         else:
             QMessageBox.information(self, "站会详情",
                 f"站会 #{meeting_id}\n标题: {meeting_data.get('title', 'N/A') if meeting_data else 'N/A'}\n状态: {meeting_data.get('status', 'N/A') if meeting_data else 'N/A'}")
+
+    def _show_error(self, msg):
+        """显示网络/服务器错误状态"""
+        self._active_title.setText("连接失败")
+        self._active_info.setText(msg)
+        self._active_detail.setText("请检查后端是否运行在 localhost:8080")
+        self._enter_btn.setVisible(False)
+        self.table.setRowCount(0)
