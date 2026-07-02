@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QSize
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 
 # ── 视图导入（子代理 B 的 view 可能尚未创建，做容错处理）──
 from views.todo_view import TodoView
@@ -395,6 +395,7 @@ class MainWindow(QMainWindow):
         self._current_page = PAGE_HOME
 
         self._setup_ui()
+        self._setup_shortcuts()
 
     def _setup_ui(self):
         # ── 中心部件 ──
@@ -471,6 +472,20 @@ class MainWindow(QMainWindow):
         # 初始页面
         self._stack.setCurrentIndex(PAGE_HOME)
         self._sidebar.set_active(PAGE_HOME)
+
+    def _setup_shortcuts(self):
+        """注册全局快捷键"""
+        QShortcut(QKeySequence("Ctrl+1"), self).activated.connect(lambda: self._sidebar.set_active(PAGE_HOME))
+        QShortcut(QKeySequence("Ctrl+2"), self).activated.connect(lambda: self._sidebar.set_active(PAGE_TODO))
+        QShortcut(QKeySequence("Ctrl+3"), self).activated.connect(lambda: self._sidebar.set_active(PAGE_DASHBOARD))
+        QShortcut(QKeySequence("Ctrl+4"), self).activated.connect(lambda: self._sidebar.set_active(PAGE_TEAM))
+        QShortcut(QKeySequence("Ctrl+R"), self).activated.connect(self._refresh_current_page)
+
+    def _refresh_current_page(self):
+        """刷新当前页面"""
+        page = self._pages.get(self._current_page)
+        if page and hasattr(page, "activate"):
+            page.activate()
 
     # ── 导航切换 ──
     def _on_navigate(self, page_index: int):

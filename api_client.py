@@ -208,7 +208,11 @@ class APIClient:
         if not team_id:
             return []
         data = self._get(f"/api/meetings?teamId={team_id}")
-        return data if isinstance(data, list) else []
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and "content" in data:
+            return data["content"]
+        return []
 
     def create_meeting(self, team_id, sprint_no: str = None, title: str = None, participants: list = None) -> Optional[dict]:
         body = {"teamId": team_id}

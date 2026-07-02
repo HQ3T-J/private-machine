@@ -79,7 +79,9 @@ mid = r.json()["data"]["id"]
 
 # 3.2 List
 r = requests.get(f"{BASE}/api/meetings?teamId={tid}", headers=h, timeout=5)
-check("站会列表", isinstance(r.json().get("data"), list))
+meeting_data = r.json().get("data", {})
+meeting_list = meeting_data.get("content", meeting_data) if isinstance(meeting_data, dict) else meeting_data
+check("站会列表", len(meeting_list) > 0)
 
 # 3.3 Detail with participants
 r = requests.get(f"{BASE}/api/meetings/{mid}", headers=h, timeout=5)

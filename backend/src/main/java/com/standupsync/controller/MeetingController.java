@@ -5,6 +5,9 @@ import com.standupsync.model.*;
 import com.standupsync.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -115,10 +118,20 @@ public class MeetingController {
     }
 
     @GetMapping
-    public ApiResponse<List<Meeting>> listMeetings(@RequestAttribute("userId") String userId,
-                                                    @RequestParam("teamId") Long teamId) {
+    public ApiResponse<?> listMeetings(@RequestAttribute("userId") String userId,
+                                        @RequestParam("teamId") Long teamId,
+                                        @RequestParam(defaultValue = "0") int page,
+                                        @RequestParam(defaultValue = "20") int size) {
         if (!isMember(userId, teamId)) return ApiResponse.error(403, "无权查看该团队的会议");
-        return ApiResponse.success(meetingRepository.findByTeamIdOrderByCreatedAtDesc(teamId));
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Meeting> result = meetingRepository.findByTeamIdOrderByCreatedAtDesc(teamId, pageable);
+        Map<String, Object> paged = new LinkedHashMap<>();
+        paged.put("content", result.getContent());
+        paged.put("totalPages", result.getTotalPages());
+        paged.put("totalElements", result.getTotalElements());
+        paged.put("page", page);
+        paged.put("size", size);
+        return ApiResponse.success(paged);
     }
 
     @PostMapping("/{id}/start")
