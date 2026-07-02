@@ -188,10 +188,11 @@ class APIClient:
         return []
 
     def get_invite_code(self, team_id) -> Optional[str]:
-        online = self._post(f"/api/teams/{team_id}/invite", {})
-        if online and isinstance(online, dict):
-            data = online.get("data", online)
-            return data.get("code") or data.get("inviteCode")
+        """获取团队邀请码（从团队详情中读取）"""
+        data = self._get(f"/api/teams/{team_id}")
+        if data and isinstance(data, dict):
+            team = data.get("team", {})
+            return team.get("inviteCode")
         return None
 
     # ═══════════════════════════════════════════════
@@ -315,7 +316,14 @@ class APIClient:
         return self._get(f"/api/meetings/{meeting_id}/summary")
 
     def update_summary_item(self, item_id: str, updates: dict) -> Optional[dict]:
-        return self._post(f"/api/meetings/summary/items/{item_id}", updates)
+        try:
+            r = requests.put(
+                f"{BASE_URL}/api/meetings/summary/items/{item_id}",
+                json=updates, headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
 
     # ═══ Phase3: 团队申请审批 ═══
     def apply_to_join(self, invite_code: str) -> Optional[dict]:
@@ -332,16 +340,41 @@ class APIClient:
         return self._post(f"/api/teams/{team_id}/applications/{app_id}/reject", {})
 
     def change_member_role(self, team_id, user_id: str, role: str) -> Optional[dict]:
-        return self._post(f"/api/teams/{team_id}/members/{user_id}/role", {"role": role})
+        try:
+            r = requests.put(
+                f"{BASE_URL}/api/teams/{team_id}/members/{user_id}/role",
+                json={"role": role}, headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
 
     def update_team_name(self, team_id, name: str) -> Optional[dict]:
-        return self._post(f"/api/teams/{team_id}", {"name": name})
+        try:
+            r = requests.put(
+                f"{BASE_URL}/api/teams/{team_id}",
+                json={"name": name}, headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
 
     def regenerate_invite_code(self, team_id) -> Optional[dict]:
         return self._post(f"/api/teams/{team_id}/invite-code", {})
 
     def dissolve_team(self, team_id) -> Optional[dict]:
         return self._post(f"/api/teams/{team_id}/dissolve", {})
+
+    def remove_team_member(self, team_id, user_id: str) -> Optional[dict]:
+        """移除团队成员"""
+        try:
+            r = requests.delete(
+                f"{BASE_URL}/api/teams/{team_id}/members/{user_id}",
+                headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
 
     # ═══ Phase4: Auth ═══
     def get_profile(self) -> Optional[dict]:
@@ -426,3 +459,39 @@ class APIClient:
     def ai_generate_todos(self, content: str, team_id) -> Optional[dict]:
         return self._post("/api/action-items/ai-generate",
                           {"content": content, "teamId": team_id})
+
+    # ═══ Phase7: 补齐缺失的 API ═══
+    def get_meeting_detail(self, meeting_id: str) -> Optional[dict]:
+        """获取单个会议详情（含参与人和发言状态）"""
+        return self._get(f"/api/meetings/{meeting_id}")
+
+    def get_unfinished_items(self, meeting_id: str) -> list:
+        """获取上次站会未完成的待办项"""
+        data = self._get(f"/api/meetings/{meeting_id}/unfinished-items")
+        return data if isinstance(data, list) else []
+
+    def confirm_items(self, meeting_id: str, items: list) -> Optional[dict]:
+        """批量确认站会待办项状态"""
+        try:
+            r = requests.put(
+                f"{BASE_URL}/api/meetings/{meeting_id}/confirm-items",
+                json=items, headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
+
+    def update_action_item_status(self, item_id: str, status: str) -> Optional[dict]:
+        """更新单个待办项状态（status 作为 query 参数传递）"""
+        try:
+            r = requests.put(
+                f"{BASE_URL}/api/action-items/{item_id}/status?status={status}",
+                headers=self._headers(), timeout=5
+            )
+            return r.json()
+        except Exception:
+            return None
+
+    def generate_action_items(self, meeting_id: str) -> Optional[dict]:
+        """从 AI 纪要自动生成待办项"""
+        return self._post(f"/api/meetings/{meeting_id}/generate-action-items", {})
