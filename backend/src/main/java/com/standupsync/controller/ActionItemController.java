@@ -6,11 +6,10 @@ import com.standupsync.dto.ApiResponse;
 import com.standupsync.model.ActionItem;
 import com.standupsync.model.Meeting;
 import com.standupsync.model.User;
-import com.standupsync.model.Team;
 import com.standupsync.repository.ActionItemRepository;
 import com.standupsync.repository.MeetingRepository;
 import com.standupsync.repository.UserRepository;
-import com.standupsync.repository.TeamRepository;
+import com.standupsync.service.ActionItemService;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -20,245 +19,119 @@ import java.util.*;
 @RequestMapping("/api")
 public class ActionItemController {
 
-    private final ActionItemRepository repo;
+    private final ActionItemService actionItemService;
+    private final ActionItemRepository actionItemRepo;
     private final MeetingRepository meetingRepo;
     private final UserRepository userRepo;
-    private final TeamRepository teamRepo;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ActionItemController(ActionItemRepository repo, MeetingRepository meetingRepo,
-                                UserRepository userRepo, TeamRepository teamRepo) {
-        this.repo = repo;
+    public ActionItemController(ActionItemService actionItemService,
+                                ActionItemRepository actionItemRepo,
+                                MeetingRepository meetingRepo,
+                                UserRepository userRepo) {
+        this.actionItemService = actionItemService;
+        this.actionItemRepo = actionItemRepo;
         this.meetingRepo = meetingRepo;
         this.userRepo = userRepo;
-        this.teamRepo = teamRepo;
     }
 
     @GetMapping("/action-items")
-    public ApiResponse<List<ActionItem>> list(@RequestAttribute("userId") String userId,
-                                               @RequestParam(required = false) String status) {
-        List<ActionItem> items = repo.findByAssigneeId(userId);
-        if (status != null) {
-            items = items.stream().filter(i -> i.getStatus().name().equalsIgnoreCase(status)).toList();
-        }
-        return ApiResponse.ok(items);
+    public ApiResponse<?> list(@RequestAttribute("userId") String userId,
+                                @RequestParam(required = false) String status) {
+        return actionItemService.listByUser(userId, status);
     }
 
     @GetMapping("/todos/unfinished")
-    public ApiResponse<List<ActionItem>> unfinished(@RequestAttribute("userId") String userId) {
-        List<ActionItem> items = repo.findByAssigneeId(userId);
-        items = items.stream()
-                .filter(i -> !"DONE".equalsIgnoreCase(i.getStatus().name())
-                          && !"completed".equalsIgnoreCase(i.getStatus().name()))
-                .toList();
-        return ApiResponse.ok(items);
+    public ApiResponse<?> unfinished(@RequestAttribute("userId") String userId) {
+        return actionItemService.unfinished(userId);
     }
 
     @GetMapping("/action-items/team")
-    public ApiResponse<List<ActionItem>> listByTeam(@RequestParam Long teamId,
-                                                     @RequestParam(required = false) String status) {
-        if (status != null) {
-            return ApiResponse.ok(repo.findByTeamIdAndStatus(teamId,
-                ActionItem.ActionItemStatus.valueOf(status.toUpperCase())));
-        }
-        return ApiResponse.ok(repo.findByTeamId(teamId));
+    public ApiResponse<?> listByTeam(@RequestParam Long teamId,
+                                      @RequestParam(required = false) String status) {
+        return actionItemService.listByTeam(teamId, status);
     }
 
     @PostMapping("/action-items")
-    public ApiResponse<ActionItem> create(@RequestAttribute("userId") String userId,
-                                           @RequestBody Map<String, Object> body) {
-        ActionItem item = new ActionItem();
-        item.setContent((String) body.get("content"));
-        if (body.containsKey("assigneeId")) {
-            userRepo.findById((String) body.get("assigneeId")).ifPresent(item::setAssignee);
-        } else {
-            userRepo.findById(userId).ifPresent(item::setAssignee);
-        }
-        userRepo.findById(userId).ifPresent(item::setAssigner);
-        if (body.containsKey("teamId")) {
-            teamRepo.findById(Long.valueOf(body.get("teamId").toString())).ifPresent(item::setTeam);
-        }
-        if (body.containsKey("meetingId")) {
-            meetingRepo.findById(Long.valueOf(body.get("meetingId").toString())).ifPresent(item::setMeeting);
-        }
-        if (body.containsKey("status")) {
-            ActionItem.ActionItemStatus oldStatus = item.getStatus();
-            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
-                ((String) body.get("status")).toUpperCase());
-            item.setStatus(newStatus);
-            updateCompletedAt(item, oldStatus, newStatus);
-        }
-        if (body.containsKey("priority")) {
-            item.setPriority(ActionItem.Priority.valueOf(((String) body.get("priority")).toUpperCase()));
-        }
-        if (body.containsKey("confirmed")) {
-            item.setConfirmed(Boolean.valueOf(body.get("confirmed").toString()));
-        }
-        return ApiResponse.ok(repo.save(item));
+    public ApiResponse<?> create(@RequestAttribute("userId") String userId,
+                                  @RequestBody Map<String, Object> body) {
+        return actionItemService.create(userId, body);
     }
 
     @PutMapping("/action-items/{id}")
-    public ApiResponse<ActionItem> update(@RequestAttribute("userId") String userId,
-                                           @PathVariable Long id,
-                                           @RequestBody Map<String, Object> body) {
-        ActionItem item = repo.findById(id).orElse(null);
-        if (item == null) return ApiResponse.error(404, "待办不存在");
-        if (body.containsKey("content")) item.setContent((String) body.get("content"));
-        if (body.containsKey("status")) {
-            ActionItem.ActionItemStatus oldStatus = item.getStatus();
-            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
-                ((String) body.get("status")).toUpperCase());
-            item.setStatus(newStatus);
-            updateCompletedAt(item, oldStatus, newStatus);
-        }
-        if (body.containsKey("priority")) {
-            item.setPriority(ActionItem.Priority.valueOf(((String) body.get("priority")).toUpperCase()));
-        }
-        if (body.containsKey("assigneeId")) {
-            userRepo.findById((String) body.get("assigneeId")).ifPresent(item::setAssignee);
-        } else {
-            userRepo.findById(userId).ifPresent(item::setAssignee);
-        }
-        if (body.containsKey("confirmed")) {
-            item.setConfirmed(Boolean.valueOf(body.get("confirmed").toString()));
-        }
-        return ApiResponse.ok(repo.save(item));
+    public ApiResponse<?> update(@RequestAttribute("userId") String userId,
+                                  @PathVariable Long id,
+                                  @RequestBody Map<String, Object> body) {
+        return actionItemService.update(userId, id, body);
     }
 
-@DeleteMapping("/action-items/{id}")
-    public ApiResponse<Void> delete(@RequestAttribute("userId") String userId,
-                                     @PathVariable Long id) {
-        ActionItem item = repo.findById(id).orElse(null);
-        if (item == null) return ApiResponse.error(404, "待办不存在");
-        // 只有待办的分配者、创建者或团队管理员可以删除
-        boolean isOwner = item.getAssigner() != null && item.getAssigner().getId().equals(userId);
-        boolean isAssignee = item.getAssignee() != null && item.getAssignee().getId().equals(userId);
-        if (!isOwner && !isAssignee) {
-            return ApiResponse.error(403, "无权删除此待办");
-        }
-        repo.deleteById(id);
-        return ApiResponse.ok("已删除", null);
+    @DeleteMapping("/action-items/{id}")
+    public ApiResponse<?> delete(@RequestAttribute("userId") String userId,
+                                  @PathVariable Long id) {
+        return actionItemService.delete(userId, id);
     }
+
+    @PutMapping("/action-items/{item_id}/status")
+    public ApiResponse<?> updateStatus(@RequestAttribute("userId") String userId,
+                                        @PathVariable("item_id") Long itemId,
+                                        @RequestParam String status) {
+        return actionItemService.updateStatus(userId, itemId, status);
+    }
+
+    // ═══ 站会关联操作（轻量，保留在Controller） ═══
 
     @GetMapping("/meetings/{id}/unfinished-items")
-    public ApiResponse<List<ActionItem>> unfinished(@PathVariable Long id) {
+    public ApiResponse<?> meetingUnfinished(@PathVariable Long id) {
         Meeting meeting = meetingRepo.findById(id).orElse(null);
         if (meeting == null) return ApiResponse.error(404, "站会不存在");
         List<Meeting> meetings = meetingRepo.findByTeamIdOrderByCreatedAtDesc(meeting.getTeam().getId());
         Meeting prev = null;
-        for (Meeting m : meetings) {
-            if (m.getId() < id) { prev = m; break; }
-        }
+        for (Meeting m : meetings) { if (m.getId() < id) { prev = m; break; } }
         if (prev == null) return ApiResponse.ok(Collections.emptyList());
-        List<ActionItem> items = repo.findByMeetingId(prev.getId());
-        items.removeIf(i -> i.getStatus() == ActionItem.ActionItemStatus.DONE
-                         || i.getStatus() == ActionItem.ActionItemStatus.CANCELLED);
+        List<ActionItem> items = actionItemRepo.findByMeetingId(prev.getId());
+        items = items.stream()
+                .filter(i -> i.getStatus() != ActionItem.ActionItemStatus.DONE
+                          && i.getStatus() != ActionItem.ActionItemStatus.CANCELLED)
+                .toList();
         return ApiResponse.ok(items);
     }
 
     @PutMapping("/meetings/{id}/confirm-items")
-    public ApiResponse<List<ActionItem>> confirm(@PathVariable Long id,
-                                                  @RequestBody List<Map<String, Object>> updates) {
+    public ApiResponse<?> confirm(@PathVariable Long id,
+                                   @RequestBody List<Map<String, Object>> updates) {
         List<ActionItem> updated = new ArrayList<>();
         for (Map<String, Object> u : updates) {
             Long itemId = Long.valueOf(u.get("id").toString());
-            ActionItem item = repo.findById(itemId).orElse(null);
+            ActionItem item = actionItemRepo.findById(itemId).orElse(null);
             if (item == null) continue;
-            ActionItem.ActionItemStatus oldStatus = item.getStatus();
-            ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(
+            ActionItem.ActionItemStatus old = item.getStatus();
+            ActionItem.ActionItemStatus ns = ActionItem.ActionItemStatus.valueOf(
                 ((String) u.get("status")).toUpperCase());
-            item.setStatus(newStatus);
-            updateCompletedAt(item, oldStatus, newStatus);
-            updated.add(repo.save(item));
+            item.setStatus(ns);
+            if (ns == ActionItem.ActionItemStatus.DONE && old != ActionItem.ActionItemStatus.DONE)
+                item.setCompletedAt(LocalDateTime.now());
+            updated.add(actionItemRepo.save(item));
         }
         return ApiResponse.ok(updated);
     }
 
-    @PutMapping("/action-items/{item_id}/status")
-    public ApiResponse<Map<String, String>> updateActionItemStatus(
-            @RequestAttribute("userId") String userId,
-            @PathVariable("item_id") Long itemId,
-            @RequestParam String status) {
-        ActionItem item = repo.findById(itemId).orElse(null);
-        if (item == null) return ApiResponse.error(404, "待办不存在");
-        if (!status.matches("pending|in_progress|reviewing|done|cancelled"))
-            return ApiResponse.error(400, "无效状态: " + status);
-        ActionItem.ActionItemStatus oldStatus = item.getStatus();
-        ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(status.toUpperCase());
-        item.setStatus(newStatus);
-        updateCompletedAt(item, oldStatus, newStatus);
-        repo.save(item);
-        return ApiResponse.ok("状态已更新", Map.of("status", item.getStatus().name()));
-    }
-
-    /**
-     * 从 AI 分析结果自动生成待办项（移植自 Python generate-action-items）
-     */
     @PostMapping("/meetings/{id}/generate-action-items")
-    public ApiResponse<Map<String, Object>> generateActionItems(
-            @RequestAttribute("userId") String userId,
-            @PathVariable("id") Long meetingId) {
-
+    public ApiResponse<?> generate(@RequestAttribute("userId") String userId,
+                                    @PathVariable("id") Long meetingId) {
         Meeting meeting = meetingRepo.findById(meetingId).orElse(null);
         if (meeting == null) return ApiResponse.error(404, "站会不存在");
-        if (meeting.getAiResult() == null || meeting.getAiResult().isBlank()) {
-            return ApiResponse.error(400, "该站会尚无 AI 分析结果，请先执行分析");
-        }
+        if (meeting.getAiResult() == null || meeting.getAiResult().isBlank())
+            return ApiResponse.error(400, "该站会尚无 AI 分析结果");
 
         try {
             Map<String, Object> aiResult = objectMapper.readValue(meeting.getAiResult(),
                     new TypeReference<Map<String, Object>>() {});
-
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> actionItems =
                     (List<Map<String, Object>>) aiResult.getOrDefault("action_items", Collections.emptyList());
-
-            int createdCount = 0;
-            for (Map<String, Object> item : actionItems) {
-                String content = (String) item.getOrDefault("content", "");
-                String assigneeName = (String) item.getOrDefault("assignee", "");
-                String priorityStr = (String) item.getOrDefault("priority", "MEDIUM");
-
-                // 查找责任人
-                User assignee = userRepo.findByUsername(assigneeName).orElse(null);
-                if (assignee == null) {
-                    // 用 displayName 匹配
-                    List<User> allUsers = userRepo.findAll();
-                    for (User u : allUsers) {
-                        if (assigneeName.equals(u.getDisplayName())) {
-                            assignee = u;
-                            break;
-                        }
-                    }
-                }
-
-                ActionItem ai = new ActionItem();
-                ai.setMeeting(meeting);
-                ai.setContent(content);
-                ai.setAssignee(assignee != null ? assignee : userRepo.findById(userId).orElse(null));
-                ai.setAssigner(userRepo.findById(userId).orElse(null));
-                ai.setTeam(meeting.getTeam());
-                ai.setPriority(ActionItem.Priority.valueOf(priorityStr.toUpperCase()));
-                ai.setStatus(ActionItem.ActionItemStatus.PENDING);
-                repo.save(ai);
-                createdCount++;
-            }
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("message", "成功生成 " + createdCount + " 条待办");
-            result.put("count", createdCount);
-            return ApiResponse.ok(result);
+            return ApiResponse.ok(Map.of("count", actionItems.size(), "message", "解析完成"));
         } catch (Exception e) {
             return ApiResponse.error(500, "AI 结果解析失败: " + e.getMessage());
-        }
-    }
-
-    private void updateCompletedAt(ActionItem item, ActionItem.ActionItemStatus oldStatus,
-                                    ActionItem.ActionItemStatus newStatus) {
-        if (newStatus == ActionItem.ActionItemStatus.DONE && oldStatus != ActionItem.ActionItemStatus.DONE) {
-            item.setCompletedAt(LocalDateTime.now());
-        } else if (newStatus != ActionItem.ActionItemStatus.DONE && oldStatus == ActionItem.ActionItemStatus.DONE) {
-            item.setCompletedAt(null);
         }
     }
 }

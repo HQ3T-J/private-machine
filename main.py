@@ -1,15 +1,23 @@
 """
-StandupSync Desktop — 应用入口
-支持: 自动登录（记住我）+ 手动登录
+StandupSync Desktop -- Application Entry
+Supports: auto-login (remember me) + manual login + single-instance mutex
 """
 import sys
 import os
 import json
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QSharedMemory
 from theme import DARK_STYLE, LIGHT_STYLE
 
 
 def main():
+    # 单实例互斥
+    shared = QSharedMemory("StandupSync_SingleInstance")
+    if shared.attach():
+        QMessageBox.critical(None, "提示", "StandupSync 已在运行中")
+        sys.exit(0)
+    shared.create(1)
+
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     app.setStyleSheet(DARK_STYLE)
