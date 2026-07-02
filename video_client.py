@@ -2,8 +2,16 @@
 import asyncio
 import json
 import base64
-import cv2
-import numpy as np
+
+try:
+    import cv2
+    import numpy as np
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+    cv2 = None
+    np = None
+
 from PySide6.QtCore import QObject, Signal, Slot, QThread
 
 class VideoClient(QObject):

@@ -44,7 +44,6 @@ PyInstaller.__main__.run([
     '--hidden-import=services.ai_engine',
     '--hidden-import=video_client',
     '--hidden-import=standupsync_core',
-    '--hidden-import=cv2',
     '--hidden-import=requests',
     '--hidden-import=urllib3',
     '--exclude-module=tkinter',
