@@ -16,4 +16,11 @@ public interface ActionItemRepository extends JpaRepository<ActionItem, Long> {
     List<ActionItem> findByTeamId(Long teamId);
 
     List<ActionItem> findByTeamIdAndStatus(Long teamId, ActionItem.ActionItemStatus status);
+
+    // ═══ 转交审批流查询 ═══
+    List<ActionItem> findByTeamIdAndTransferStatus(Long teamId, ActionItem.TransferStatus transferStatus);
+
+    List<ActionItem> findByTeamIdAndTransferStatusIn(Long teamId, List<ActionItem.TransferStatus> statuses);
+
+    List<ActionItem> findByTransferredByAndTransferStatus(String userId, ActionItem.TransferStatus transferStatus);
 }

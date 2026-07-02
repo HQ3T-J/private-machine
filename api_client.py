@@ -372,3 +372,57 @@ class APIClient:
         url = f"/api/dashboard/trends?teamId={team_id}"
         if user_id: url += f"&userId={user_id}"
         return self._get(url)
+
+    # ═══════════════════════════════════════════════
+    #  Phase6: 转交审批流 + 通知 + AI 生成
+    # ═══════════════════════════════════════════════
+
+    # ── 转交审批 ──
+    def transfer_todo(self, todo_id, target_user_id: str, reason: str = "") -> Optional[dict]:
+        return self._post(f"/api/action-items/{todo_id}/transfer",
+                          {"targetUserId": target_user_id, "reason": reason})
+
+    def approve_transfer(self, todo_id) -> Optional[dict]:
+        return self._post(f"/api/action-items/{todo_id}/approve-transfer", {})
+
+    def reject_transfer(self, todo_id, reason: str = "") -> Optional[dict]:
+        return self._post(f"/api/action-items/{todo_id}/reject-transfer",
+                          {"reason": reason})
+
+    def cancel_transfer(self, todo_id) -> Optional[dict]:
+        return self._post(f"/api/action-items/{todo_id}/cancel-transfer", {})
+
+    def get_pending_transfers(self, team_id) -> list:
+        data = self._get(f"/api/action-items/pending-transfers?teamId={team_id}")
+        return data if isinstance(data, list) else []
+
+    def get_reviewed_transfers(self, team_id) -> list:
+        data = self._get(f"/api/action-items/reviewed-transfers?teamId={team_id}")
+        return data if isinstance(data, list) else []
+
+    def hide_transfer_record(self, todo_id) -> Optional[dict]:
+        return self._post(f"/api/action-items/{todo_id}/hide-transfer-record", {})
+
+    # ── 通知 ──
+    def get_notifications(self) -> list:
+        data = self._get("/api/notifications")
+        return data if isinstance(data, list) else []
+
+    def get_unread_notifications(self) -> list:
+        data = self._get("/api/notifications/unread")
+        return data if isinstance(data, list) else []
+
+    def get_unread_notification_count(self) -> int:
+        data = self._get("/api/notifications/count")
+        return data.get("unreadCount", 0) if isinstance(data, dict) else 0
+
+    def mark_notification_read(self, notification_id) -> Optional[dict]:
+        return self._post(f"/api/notifications/{notification_id}/read", {})
+
+    def mark_all_notifications_read(self) -> Optional[dict]:
+        return self._post("/api/notifications/read-all", {})
+
+    # ── AI 生成 ──
+    def ai_generate_todos(self, content: str, team_id) -> Optional[dict]:
+        return self._post("/api/action-items/ai-generate",
+                          {"content": content, "teamId": team_id})

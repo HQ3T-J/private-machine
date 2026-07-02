@@ -172,7 +172,7 @@ public class ActionItemController {
             @RequestParam String status) {
         ActionItem item = repo.findById(itemId).orElse(null);
         if (item == null) return ApiResponse.error(404, "待办不存在");
-        if (!status.matches("pending|in_progress|done|cancelled"))
+        if (!status.matches("pending|in_progress|reviewing|done|cancelled"))
             return ApiResponse.error(400, "无效状态: " + status);
         ActionItem.ActionItemStatus oldStatus = item.getStatus();
         ActionItem.ActionItemStatus newStatus = ActionItem.ActionItemStatus.valueOf(status.toUpperCase());

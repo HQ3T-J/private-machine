@@ -59,6 +59,42 @@ except ImportError:
         def activate(self):
             pass
 
+# 新增视图（Phase6: To-Do Module 接入）
+try:
+    from views.notification_view import NotificationView
+except ImportError:
+    class NotificationView(QWidget):
+        title = "通知"
+        unread_count_changed = Signal(int)
+
+        def __init__(self, api_client=None, parent=None):
+            super().__init__(parent)
+            layout = QVBoxLayout(self)
+            lbl = QLabel("通知中心\n(notification_view.py)")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("color: #8E8E9E; font-size: 16px;")
+            layout.addWidget(lbl)
+
+        def activate(self):
+            pass
+
+try:
+    from views.transfer_view import TransferView
+except ImportError:
+    class TransferView(QWidget):
+        title = "转交审核"
+
+        def __init__(self, api_client=None, parent=None):
+            super().__init__(parent)
+            layout = QVBoxLayout(self)
+            lbl = QLabel("转交审核\n(transfer_view.py)")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("color: #8E8E9E; font-size: 16px;")
+            layout.addWidget(lbl)
+
+        def activate(self):
+            pass
+
 # 如果主入口提供了 meeting_room_view / ai_result_view，可通过 set_extra_views 注入
 try:
     from views.meeting_room_view import MeetingRoomView
@@ -76,6 +112,8 @@ PAGE_DASHBOARD = 2
 PAGE_TEAM = 3
 PAGE_SETTINGS = 4
 PAGE_MEETING_ROOM = 5
+PAGE_NOTIFICATION = 6
+PAGE_TRANSFER = 7
 
 
 class SidebarButton(QFrame):
@@ -201,6 +239,7 @@ class Sidebar(QFrame):
             ("\u2713", "待办", PAGE_TODO),
             ("\u25A3", "看板", PAGE_DASHBOARD),
             ("\u263A", "团队", PAGE_TEAM),
+            ("\u25CF", "通知", PAGE_NOTIFICATION),
             ("\u2699", "设置", PAGE_SETTINGS),
         ]
         for icon, label, idx in nav_items:
@@ -276,13 +315,13 @@ class Sidebar(QFrame):
             for btn in self._buttons.values():
                 btn.setVisible(True)
         elif role in ("developer",):
-            # 隐藏"团队"按钮
+            # 隐藏"团队"和"转交审核"
             for idx, btn in self._buttons.items():
-                btn.setVisible(idx != PAGE_TEAM)
+                btn.setVisible(idx not in (PAGE_TEAM, PAGE_TRANSFER))
         elif role in ("observer",):
-            # 只显示"站会"和"看板"
+            # 只显示"站会"、"看板"、"通知"
             for idx, btn in self._buttons.items():
-                btn.setVisible(idx in (PAGE_HOME, PAGE_DASHBOARD))
+                btn.setVisible(idx in (PAGE_HOME, PAGE_DASHBOARD, PAGE_NOTIFICATION))
         else:
             # 默认全部可见
             pass
@@ -406,6 +445,17 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(settings)
         self._pages[PAGE_SETTINGS] = settings
 
+        # 6: 通知中心
+        notification = NotificationView(api_client=self._api_client)
+        notification.unread_count_changed.connect(self._on_unread_count_changed)
+        self._stack.addWidget(notification)
+        self._pages[PAGE_NOTIFICATION] = notification
+
+        # 7: 转交审核
+        transfer = TransferView(api_client=self._api_client)
+        self._stack.addWidget(transfer)
+        self._pages[PAGE_TRANSFER] = transfer
+
         # 5: 站会进行中
         meeting_room = MeetingRoomView(api_client=self._api_client)
         meeting_room.navigate_back.connect(self._on_meeting_back)
@@ -457,6 +507,14 @@ class MainWindow(QMainWindow):
     def navigate_to(self, page_index: int):
         """程序化导航到指定页面。"""
         self._sidebar.set_active(page_index)
+
+    def _on_unread_count_changed(self, count):
+        """更新侧边栏通知角标"""
+        if count > 0:
+            display = f"{min(count, 99)}+" if count > 99 else str(count)
+            self._sidebar.set_notification(PAGE_NOTIFICATION, int(display) if count <= 99 else 99)
+        else:
+            self._sidebar.set_notification(PAGE_NOTIFICATION, 0)
 
     def set_extra_views(self, extra: dict):
         """注册额外的页面（如会议页面等），用于子代理 B 集成。

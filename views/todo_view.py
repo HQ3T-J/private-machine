@@ -78,8 +78,8 @@ class TodoView(QWidget):
         tab_layout.addSpacing(12)
 
         self._tabs = {}
-        self._tab_keys = ["all", "pending", "in_progress", "completed"]
-        self._tab_labels = {"all": "全部", "pending": "待处理", "in_progress": "进行中", "completed": "已完成"}
+        self._tab_keys = ["all", "pending", "in_progress", "reviewing", "completed"]
+        self._tab_labels = {"all": "全部", "pending": "待处理", "in_progress": "进行中", "reviewing": "审核中", "completed": "已完成"}
         for key in self._tab_keys:
             btn = QPushButton(self._tab_labels[key])
             btn.setCheckable(True)
@@ -242,10 +242,10 @@ class TodoView(QWidget):
 
     def _update_tab_counts(self):
         """根据实际数据更新 Tab 计数"""
-        counts = {"all": len(self._todos), "pending": 0, "in_progress": 0, "completed": 0}
+        counts = {"all": len(self._todos), "pending": 0, "in_progress": 0, "reviewing": 0, "completed": 0}
         for t in self._todos:
             s = t.get("status", "")
-            s = {"PENDING":"pending","IN_PROGRESS":"in_progress","DONE":"completed","CANCELLED":"completed"}.get(s, s.lower())
+            s = {"PENDING":"pending","IN_PROGRESS":"in_progress","REVIEWING":"reviewing","DONE":"completed","CANCELLED":"completed"}.get(s, s.lower())
             if s in counts: counts[s] += 1
         for key in self._tab_keys:
             if key in self._tabs:
