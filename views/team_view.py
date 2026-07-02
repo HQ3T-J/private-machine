@@ -30,9 +30,10 @@ class CreateTeamDialog(QDialog):
         if not name: QMessageBox.warning(self, "提示", "请输入团队名称"); return
         if self.api_client:
             r = self.api_client._post("/api/teams", {"name": name})
-            if r and r.get("code") == 200: self.accept(); return
+            if r and r.get("code") == 200:
+                self.accept()
+                return
         QMessageBox.warning(self, "错误", "创建失败，请检查后端连接")
-        self.accept()
 
 
 class JoinTeamDialog(QDialog):
@@ -54,10 +55,10 @@ class JoinTeamDialog(QDialog):
             r = self.api_client.apply_to_join(code)
             if r and r.get("code") == 200:
                 QMessageBox.information(self, "提示", r.get("message", "申请已提交，等待团长审核"))
-                self.accept(); return
+                self.accept()
+                return
             msg = r.get("message", "失败") if r else "后端无响应"
             QMessageBox.warning(self, "提示", msg)
-        self.accept()
 
 
 class TeamView(QWidget):
@@ -111,14 +112,17 @@ class TeamView(QWidget):
         self._team_name_label.setText(team.get("name", ""))
         self._invite_label.setText(f"📋 {self._invite_code}")
 
-        # 确定当前角色
+        # 确定当前角色（以当前团队的实际角色为准）
         self._current_role = None
         self._my_application = None
         uid = self.api_client.user_id
         for m in self._members:
             if m.get("user_id") == uid:
-                self._current_role = m.get("role", ""); break
-        self._current_role = self.api_client.role or self._current_role or ""
+                self._current_role = m.get("role", "")
+                break
+        # 只有在当前团队中无角色记录时，才回退到全局角色
+        if not self._current_role:
+            self._current_role = self.api_client.role or ""
 
         # 查询我的申请状态
         self._check_my_application()
@@ -238,7 +242,7 @@ class TeamView(QWidget):
         splitter.addWidget(left)
 
         # 右：审批面板
-        right = QFrame(); right.setObjectName("ApprovalPanel")
+        right = QFrame()
         right.setObjectName("ApprovalPanel")
         rl = QVBoxLayout(right); rl.setContentsMargins(10, 8, 10, 8)
         rl.addWidget(QLabel("📋 入团申请"))
@@ -388,17 +392,26 @@ class TeamView(QWidget):
             QMessageBox.warning(self, "提示", msg)
 
     def _remove_member(self, user_id, row):
+        name = self._members[row].get("name") or self._members[row].get("username", "该成员")
+        reply = QMessageBox.question(
+            self, "确认移除", f"确定要移除成员「{name}」吗？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
         try:
-            import requests
-            from api_client import APIClient
-            requests.delete(
-                f"{APIClient.base_url()}/api/teams/{self._current_team_id}/members/{user_id}",
-                headers=self.api_client._headers(), timeout=5)
-            if 0 <= row < len(self._members): del self._members[row]
-            self._populate_members()
-            self.member_removed.emit(str(user_id))
+            r = self.api_client.remove_team_member(self._current_team_id, user_id)
+            if r and r.get("code") == 200:
+                if 0 <= row < len(self._members):
+                    del self._members[row]
+                self._populate_members()
+                self.member_removed.emit(str(user_id))
+            else:
+                msg = r.get("message", "移除失败") if isinstance(r, dict) else "后端无响应"
+                QMessageBox.warning(self, "提示", msg)
         except Exception as e:
             print(f"[TeamView] Remove member failed: {e}")
+            QMessageBox.warning(self, "错误", "移除成员失败，请检查网络连接")
 
     def _on_dissolve(self):
         if self._current_role != "TECH_LEAD":

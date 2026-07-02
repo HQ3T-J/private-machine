@@ -167,7 +167,15 @@ class DashboardView(QWidget):
         # ── 标题栏 ──
         hdr = QHBoxLayout()
         t = QLabel("数据看板"); t.setStyleSheet("font-size:20px;font-weight:bold;")
-        hdr.addWidget(t); hdr.addStretch()
+        hdr.addWidget(t)
+
+        self._team_combo = QComboBox()
+        self._team_combo.setFixedWidth(160)
+        self._team_combo.setStyleSheet(_combo_style())
+        self._team_combo.currentIndexChanged.connect(self._on_team_changed)
+        hdr.addWidget(self._team_combo)
+
+        hdr.addStretch()
         self._refresh_btn = QPushButton("刷新")
         self._refresh_btn.setStyleSheet("QPushButton{background:transparent;color:#4A90D9;border:1px solid #4A90D9;border-radius:4px;padding:4px 12px;font-size:12px;} QPushButton:hover{background:rgba(74,144,217,0.2);}")
         self._refresh_btn.setCursor(Qt.PointingHandCursor)
@@ -260,13 +268,29 @@ class DashboardView(QWidget):
         self._team_id = None
         if self.api_client:
             teams = self.api_client.get_teams()
+            # 填充团队下拉框
+            self._team_combo.blockSignals(True)
+            self._team_combo.clear()
+            for t in teams:
+                self._team_combo.addItem(t.get("name", ""), t.get("id"))
+            self._team_combo.blockSignals(False)
             if teams:
-                self._team_id = teams[0].get("id")
+                self._team_id = self._team_combo.currentData() or teams[0].get("id")
                 self._load_sprints()
                 self._load_members()
                 self._start_loading()
                 return
         self._clear_all()
+
+    def _on_team_changed(self, _idx):
+        """团队切换时重新加载"""
+        if self._team_combo.count() == 0:
+            return
+        self._team_id = self._team_combo.currentData()
+        if self._team_id:
+            self._load_sprints()
+            self._load_members()
+            self._start_loading()
 
     def _start_loading(self):
         """启动后台线程加载数据，UI 不冻结。"""
@@ -350,53 +374,6 @@ class DashboardView(QWidget):
         self._sprint_combo.setCurrentIndex(idx if idx>=0 else 0)
         self._sprint_combo.blockSignals(False)
 
-    def _load_all_data(self):
-        if not self._team_id or not self.api_client: return
-        c = self.api_client; f = self._filters
-        sprint = f.get("sprint"); sprint_str = str(sprint) if sprint else None
-
-        # Summary — 用后端 dateFrom/dateTo
-        s = c.get_dashboard_summary(self._team_id, sprint_str, f.get("dateFrom"), f.get("dateTo")) or {}
-        self._cards["meetings"].update_value(str(s.get("totalMeetings",0)))
-        ar = s.get("avgAttendanceRate",0)
-        self._cards["attendance"].update_value(f"{int(ar*100)}%" if isinstance(ar,float) and ar<=1 else f"{ar}%")
-        cr = s.get("completionRate",0)
-        self._cards["completion"].update_value(f"{int(cr*100)}%" if isinstance(cr,float) and cr<=1 else f"{cr}%")
-        self._cards["blockers"].update_value(str(s.get("activeBlockers",0)))
-
-        # Trends — 用后端 userId
-        uid = f.get("userId")
-        att_data = c.get_dashboard_trend(self._team_id, "attendance", uid)
-        comp_data = c.get_dashboard_trend(self._team_id, "completion", uid)
-        self._trend_att.set_data(att_data)
-        self._trend_comp.set_data(comp_data)
-
-        # Blocker — 用独立端点 blocker-distribution
-        bt = _BLOCKER_MAP.get(f.get("blocker_type")) if f.get("blocker_type") else None
-        blocker_data = c.get_dashboard_blocker(self._team_id, bt)
-        self._blocker.set_data(blocker_data)
-
-        # Ranking — 用后端 sortBy
-        ranking = c.get_member_ranking(self._team_id, f.get("sortBy", "completionRate"))
-        self._rank_table.setRowCount(len(ranking))
-        for i, m in enumerate(ranking):
-            ri = QTableWidgetItem(str(i+1)); ri.setTextAlignment(Qt.AlignCenter)
-            self._rank_table.setItem(i,0,ri)
-            self._rank_table.setItem(i,1,QTableWidgetItem(m.get("name","?")))
-            ti = QTableWidgetItem(str(m.get("total",0))); ti.setTextAlignment(Qt.AlignCenter)
-            self._rank_table.setItem(i,2,ti)
-            rt = m.get("rate",0)
-            if isinstance(rt,float) and rt<=1: rt*=100
-            ri2 = QTableWidgetItem(f"{int(rt)}%"); ri2.setTextAlignment(Qt.AlignCenter)
-            self._rank_table.setItem(i,3,ri2)
-            pb = QProgressBar(); pb.setRange(0,100); pb.setValue(int(rt)); pb.setTextVisible(False)
-            pb.setStyleSheet(
-                "QProgressBar{border:none;border-radius:4px;min-height:8px;max-height:12px;}"
-                "QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}"
-            )
-            self._rank_table.setCellWidget(i,4,pb)
-            self._rank_table.setRowHeight(i, 28)
-
     def _clear_all(self):
         for c in self._cards.values(): c.update_value("—")
         self._trend_att.set_data([]); self._trend_comp.set_data([])
@@ -446,86 +423,3 @@ class DashboardView(QWidget):
         self._time_combo.setCurrentIndex(0)
 
     def _sync_tags(self): pass  # 简化：按需实现标签行
-
-
-# ═══════════════════════════════════════════════════════════
-#  数据辅助函数（模块级）
-# ═══════════════════════════════════════════════════════════
-
-def _item_in_sprint(item, meetings, sprint_no):
-    """判断待办是否属于指定 sprint 的站会"""
-    mid = item.get("meeting", {}).get("id") if isinstance(item.get("meeting"), dict) else item.get("meetingId")
-    if mid is None: return False
-    for m in meetings:
-        if m.get("id") == mid and m.get("sprintNo") == sprint_no:
-            return True
-    return False
-
-def _build_trend_from_meetings(meetings, trend_type, items=None):
-    """从站会列表构建趋势数据"""
-    if not meetings: return []
-    sorted_m = sorted(meetings, key=lambda m: m.get("createdAt", ""))
-    result = []
-    for m in sorted_m[-10:]:  # 最近10次
-        date = m.get("createdAt", "")[:10]
-        if trend_type == "attendance":
-            # 从 meeting 的 participants 计算
-            participants = m.get("participants", [])
-            if participants:
-                spoken = sum(1 for p in participants if p.get("has_spoken"))
-                rate = spoken / len(participants) if participants else 0
-            else:
-                rate = 0
-        else:  # completion
-            if items:
-                mid = m.get("id")
-                mitems = [i for i in items if _item_meeting_id(i) == mid]
-                done = sum(1 for i in mitems if i.get("status") in ("DONE", "completed"))
-                rate = done / len(mitems) if mitems else 0
-            else:
-                rate = 0
-        result.append({"date": date[-5:], "rate": rate})
-    return result
-
-def _item_meeting_id(item):
-    m = item.get("meeting")
-    if isinstance(m, dict): return m.get("id")
-    return item.get("meetingId")
-
-def _build_blocker_dist(meetings, api_client):
-    """从站会发言中统计阻碍分布"""
-    if not meetings: return []
-    cats = {"tech": 0, "resource": 0, "communication": 0, "other": 0}
-    labels = {"tech": "技术问题", "resource": "资源问题", "communication": "沟通问题", "other": "其他"}
-    colors = {"tech": "#1890FF", "resource": "#F5A623", "communication": "#7B7B7B", "other": "#D0D0D0"}
-    for m in meetings:
-        try:
-            speeches = api_client.get_speeches(str(m.get("id"))) or []
-            for s in speeches:
-                b = (s.get("blockers") or "").lower()
-                if not b: continue
-                if any(kw in b for kw in ["技术","bug","代码","环境","数据库","服务器","compile","error"]): cats["tech"] += 1
-                elif any(kw in b for kw in ["资源","人力","排期","人手","budget","equipment"]): cats["resource"] += 1
-                elif any(kw in b for kw in ["沟通","需求","确认","对齐","不清楚","等待"]): cats["communication"] += 1
-                else: cats["other"] += 1
-        except Exception:
-            pass  # 单个站会的发言获取失败不影响整体统计
-    return [{"type": k, "label": labels[k], "count": cats[k], "color": colors[k]} for k in cats if cats[k] > 0]
-
-def _build_ranking(items, api_client):
-    """从待办列表计算成员排行"""
-    if not items: return []
-    by_user = {}
-    for i in items:
-        assignee = i.get("assignee", {}) or {}
-        uid = assignee.get("id") or i.get("assigneeId") or "unknown"
-        name = assignee.get("displayName") or assignee.get("username") or uid
-        if uid not in by_user: by_user[uid] = {"name": name, "total": 0, "done": 0}
-        by_user[uid]["total"] += 1
-        if i.get("status") in ("DONE", "completed"): by_user[uid]["done"] += 1
-    ranking = []
-    for uid, data in by_user.items():
-        rate = data["done"] / data["total"] if data["total"] else 0
-        ranking.append({"name": data["name"], "total": data["total"], "rate": rate})
-    ranking.sort(key=lambda x: x["rate"], reverse=True)
-    return ranking

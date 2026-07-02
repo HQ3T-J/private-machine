@@ -51,7 +51,7 @@ class VideoPanel(QFrame):
 
         for i, m in enumerate(members[:6]):
             uid = m.get("user_id", "")
-            name = m.get("displayName") or m.get("display_name") or m.get("username", "?")
+            name = m.get("displayName") or m.get("username", "?")
             has_video = uid in video_users
 
             slot = QFrame()
@@ -102,6 +102,8 @@ class MeetingRoomView(QWidget):
         self._meeting_id = meeting_id
         self._meeting_data = meeting_data or {}
         self._load_meeting_data()
+        # 从会议数据读取倒计时（默认900秒）
+        self._timer_seconds = (self._meeting_data or {}).get("countdownSeconds", 900)
         self._refresh_all()
         self._timer.start(1000)
         self._connect_ws()
@@ -113,6 +115,8 @@ class MeetingRoomView(QWidget):
         result = self.api_client._get(f"/api/meetings/{mid}")
         if result and isinstance(result, dict):
             self._meeting_data = result
+            # 提取参与人列表
+            self._members = result.get("participants", [])
         else:
             # 会议不存在或已删除
             self._meeting_data = {"id": mid, "status": "DELETED", "title": "已删除"}
@@ -124,13 +128,12 @@ class MeetingRoomView(QWidget):
         self._speeches = speeches if speeches else []
 
     def _connect_ws(self):
-        """连接 WebSocket 接收实时更新"""
-        try:
-            import asyncio, json
-            # WebSocket 在单独的线程中运行（简化方案：用轮询替代）
-            # 实际生产环境建议用 QWebSocket
-        except Exception:
-            pass
+        """连接 WebSocket 接收实时更新。
+
+        当前使用轮询方式（activate 时通过 _load_meeting_data 加载数据）。
+        后续版本可通过 QWebSocket 实现实时推送。
+        """
+        pass
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -315,7 +318,7 @@ class MeetingRoomView(QWidget):
         spoken_ids = {s.get("speaker", {}).get("id", "") for s in self._speeches}
         for i, m in enumerate(self._members):
             uid = m.get("user_id", "")
-            name = m.get("displayName") or m.get("display_name") or m.get("username", f"M{i+1}")
+            name = m.get("displayName") or m.get("username", f"M{i+1}")
             if uid in spoken_ids:
                 prefix, suffix = "🟢", "  ✓"
             elif i == self._current_speaker_idx:
@@ -345,7 +348,7 @@ class MeetingRoomView(QWidget):
     def _highlight_current_speaker(self):
         if 0 <= self._current_speaker_idx < len(self._members):
             m = self._members[self._current_speaker_idx]
-            name = m.get("displayName") or m.get("display_name") or m.get("username", "?")
+            name = m.get("displayName") or m.get("username", "?")
             self._speaker_label.setText(f"🎤 {name} 正在发言")
         else:
             self._speaker_label.setText("🎤 全部发言完毕")
@@ -382,9 +385,9 @@ class MeetingRoomView(QWidget):
             mode_text = "DeepSeek AI" if ai_mode == "llm" else "智能解析"
             self._ai_preview.setText(f"{icon} {mode_text}: " + " | ".join(preview))
             self._ai_preview.setStyleSheet(
-                "font-size: 11px; color: #52C41A; padding: 4px 8px; background:#0D1117; border-radius:4px;"
+                "font-size: 11px; color: #52C41A; padding: 4px 8px;"
                 if ai_mode == "llm" else
-                "font-size: 11px; color: #F5A623; padding: 4px 8px; background:#0D1117; border-radius:4px;"
+                "font-size: 11px; color: #F5A623; padding: 4px 8px;"
             )
             self._ai_preview.setVisible(True)
 

@@ -104,7 +104,12 @@ public class MeetingController {
         result.put("createdBy", meeting.getCreatedBy());
         result.put("createdAt", meeting.getCreatedAt());
         result.put("endedAt", meeting.getEndedAt());
-        result.put("team", meeting.getTeam());
+        // 只暴露团队必要字段，避免 Hibernate 懒加载序列化异常
+        Team team = meeting.getTeam();
+        Map<String, Object> teamInfo = new LinkedHashMap<>();
+        teamInfo.put("id", team.getId());
+        teamInfo.put("name", team.getName());
+        result.put("team", teamInfo);
         result.put("participants", participantList);
         return ApiResponse.success(result);
     }

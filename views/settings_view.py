@@ -77,6 +77,15 @@ class SettingsView(QWidget):
                 self.api_client.clear_session()
             QApplication.instance().quit()
 
+    def _on_save_profile(self):
+        """保存昵称修改（本地更新，后续对接后端 API）"""
+        new_name = self.nickname_input.text().strip()
+        if new_name and self.api_client:
+            self.api_client.username = new_name
+            # TODO: 后端补充 PUT /api/auth/profile 端点后对接
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "提示", "昵称已更新（本地生效）")
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 24, 32, 24)
@@ -130,6 +139,7 @@ class SettingsView(QWidget):
         save = QPushButton("保存修改")
         save.setFixedHeight(32)
         save.setCursor(Qt.PointingHandCursor)
+        save.clicked.connect(self._on_save_profile)
         row.addWidget(save)
         gl.addLayout(row)
         return g
@@ -140,6 +150,7 @@ class SettingsView(QWidget):
         gl = QVBoxLayout(g)
         gl.setSpacing(6)
 
+        # 通知设置（当前仅本地 UI 状态，后端通知偏好 API 待补充）
         self.standup_reminder = ToggleSwitch("站会开始前提醒", True)
         gl.addWidget(self.standup_reminder)
 

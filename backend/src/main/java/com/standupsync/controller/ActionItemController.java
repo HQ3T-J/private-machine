@@ -126,7 +126,16 @@ public class ActionItemController {
     }
 
 @DeleteMapping("/action-items/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResponse<Void> delete(@RequestAttribute("userId") String userId,
+                                     @PathVariable Long id) {
+        ActionItem item = repo.findById(id).orElse(null);
+        if (item == null) return ApiResponse.error(404, "待办不存在");
+        // 只有待办的分配者、创建者或团队管理员可以删除
+        boolean isOwner = item.getAssigner() != null && item.getAssigner().getId().equals(userId);
+        boolean isAssignee = item.getAssignee() != null && item.getAssignee().getId().equals(userId);
+        if (!isOwner && !isAssignee) {
+            return ApiResponse.error(403, "无权删除此待办");
+        }
         repo.deleteById(id);
         return ApiResponse.ok("已删除", null);
     }

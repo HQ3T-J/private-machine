@@ -313,6 +313,7 @@ class HomeView(QWidget):
             self.table.setItem(row_idx, 2, QTableWidgetItem(f"Sprint#{m.get('sprintNo', '')}"))
             self.table.setItem(row_idx, 3, QTableWidgetItem(m.get("status", "")))
             self.table.setItem(row_idx, 4, QTableWidgetItem("-"))
+            # 注: 列表视图不逐个加载发言阻碍数据，详情请进入站会室查看
 
             btn_row = QHBoxLayout()
             btn_row.setSpacing(4)
