@@ -3,10 +3,60 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QTextEdit, QFrame, QSizePolicy,
-    QMessageBox, QScrollArea, QSplitter
+    QMessageBox, QScrollArea, QSplitter, QGridLayout
 )
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QTimer, Signal, QThread
+from PySide6.QtGui import QFont, QImage, QPixmap
+import time
+
+# 可选依赖：视频功能
+try:
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+try:
+    from video_client import VideoClientWrapper
+    HAS_VIDEO_CLIENT = True
+except ImportError:
+    HAS_VIDEO_CLIENT = False
+    VideoClientWrapper = None
+
+
+class VideoCaptureThread(QThread):
+    """摄像头采集线程"""
+    frame_ready = Signal(QImage)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cap = None
+        self._running = False
+
+    def start_capture(self, camera_index=0):
+        if not HAS_CV2:
+            return
+        if not self._running:
+            self._cap = cv2.VideoCapture(camera_index)
+            self._running = True
+            self.start()
+
+    def stop_capture(self):
+        self._running = False
+        self.wait()
+        if self._cap:
+            self._cap.release()
+            self._cap = None
+
+    def run(self):
+        while self._running and self._cap:
+            ret, frame = self._cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = frame.shape
+                q_image = QImage(frame.data, w, h, ch * w, QImage.Format_RGB888)
+                self.frame_ready.emit(q_image)
+            time.sleep(0.033)
 
 
 class VideoPanel(QFrame):
@@ -94,6 +144,16 @@ class MeetingRoomView(QWidget):
         self._video_users = set()
         self._ws = None  # WebSocket connection
 
+        # 视频状态
+        self._camera_on = False
+        self._mic_on = True
+        self._screen_share_on = False
+        self._is_online = False
+        self._video_client = None
+        self._video_thread = VideoCaptureThread()
+        self._video_thread.frame_ready.connect(self._update_video_frame)
+        self._video_labels = []  # (label, name) tuples for video grid
+
         self._timer = QTimer()
         self._timer.timeout.connect(self._tick_timer)
         self._setup_ui()
@@ -166,6 +226,54 @@ class MeetingRoomView(QWidget):
         end_btn.clicked.connect(self._on_end_meeting)
         top_bar.addWidget(end_btn)
         layout.addLayout(top_bar)
+
+        # ═══ 视频控制栏 ═══
+        video_bar = QHBoxLayout()
+        video_bar.setSpacing(6)
+
+        self._camera_btn = QPushButton("📹 摄像头")
+        self._camera_btn.setStyleSheet("QPushButton{background:#16213E;color:#E0E0E0;border:1px solid #0F3460;border-radius:4px;padding:4px 10px;font-size:11px;} QPushButton:hover{background:#1A4A7A;} QPushButton#cam_on{background:#52C41A;color:#FFF;border-color:#52C41A;}")
+        self._camera_btn.setCursor(Qt.PointingHandCursor)
+        self._camera_btn.clicked.connect(self._on_toggle_camera)
+        video_bar.addWidget(self._camera_btn)
+
+        self._mic_btn = QPushButton("🎙 麦克风")
+        self._mic_btn.setStyleSheet("QPushButton{background:#52C41A;color:#FFF;border:1px solid #52C41A;border-radius:4px;padding:4px 10px;font-size:11px;} QPushButton:hover{background:#43A017;} QPushButton#mic_off{background:#E74C3C;border-color:#E74C3C;}")
+        self._mic_btn.setCursor(Qt.PointingHandCursor)
+        self._mic_btn.clicked.connect(self._on_toggle_mic)
+        video_bar.addWidget(self._mic_btn)
+
+        self._share_btn = QPushButton("🖥 共享")
+        self._share_btn.setStyleSheet("QPushButton{background:#16213E;color:#E0E0E0;border:1px solid #0F3460;border-radius:4px;padding:4px 10px;font-size:11px;} QPushButton:hover{background:#1A4A7A;} QPushButton#share_on{background:#F5A623;color:#FFF;border-color:#F5A623;}")
+        self._share_btn.setCursor(Qt.PointingHandCursor)
+        self._share_btn.clicked.connect(self._on_toggle_screen_share)
+        video_bar.addWidget(self._share_btn)
+
+        self._online_btn = QPushButton("🟢 线上会议")
+        self._online_btn.setStyleSheet("QPushButton{background:#27AE60;color:#FFF;border:none;border-radius:4px;padding:4px 10px;font-size:11px;} QPushButton:hover{background:#2ECC71;} QPushButton#online_on{background:#E74C3C;}")
+        self._online_btn.setCursor(Qt.PointingHandCursor)
+        self._online_btn.clicked.connect(self._on_toggle_online)
+        video_bar.addWidget(self._online_btn)
+
+        video_bar.addStretch()
+        layout.addLayout(video_bar)
+
+        # ═══ 视频网格 ═══
+        self._video_grid = QFrame()
+        self._video_grid.setObjectName("VideoGrid")
+        self._video_grid.setMinimumHeight(80)
+        self._video_grid.setMaximumHeight(160)
+        video_grid_layout = QGridLayout(self._video_grid)
+        video_grid_layout.setSpacing(4)
+        for i in range(4):
+            slot = QLabel(f"参会者 {i+1}")
+            slot.setAlignment(Qt.AlignCenter)
+            slot.setStyleSheet("background:#0D1117;color:#8E8E9E;border-radius:4px;font-size:11px;")
+            slot.setMinimumSize(120, 60)
+            self._video_labels.append((slot, f"参会者 {i+1}"))
+            video_grid_layout.addWidget(slot, 0, i)
+        self._video_grid.setVisible(False)
+        layout.addWidget(self._video_grid)
 
         # ═══ 三栏主体 ═══
         splitter = QSplitter(Qt.Horizontal)
@@ -443,12 +551,105 @@ class MeetingRoomView(QWidget):
         if self.api_client:
             self.api_client.end_meeting(str(self._meeting_id))
         self._timer.stop()
+        self._cleanup_video()
         self.meeting_ended.emit(self._meeting_id)
         self.navigate_back.emit()
 
     def _on_back(self):
         self._timer.stop()
+        self._cleanup_video()
         self.navigate_back.emit()
+
+    def _cleanup_video(self):
+        """清理视频资源"""
+        if self._camera_on:
+            self._video_thread.stop_capture()
+            self._camera_on = False
+        if self._video_client:
+            self._video_client.stop()
+            self._video_client = None
+        self._video_grid.setVisible(False)
+
+    # ═══ 视频控制方法 ═══
+
+    def _on_toggle_camera(self):
+        if not HAS_CV2:
+            QMessageBox.information(self, "提示", "摄像头功能需要安装 opencv-python")
+            return
+        self._camera_on = not self._camera_on
+        if self._camera_on:
+            self._camera_btn.setText("📹 关闭")
+            self._camera_btn.setObjectName("cam_on")
+            self._camera_btn.setStyleSheet(self._camera_btn.styleSheet())
+            try:
+                self._video_thread.start_capture(0)
+                self._video_grid.setVisible(True)
+                self._video_labels[0][0].setText("📷 摄像头")
+            except Exception as e:
+                QMessageBox.warning(self, "警告", f"无法打开摄像头: {e}")
+                self._camera_on = False
+                self._camera_btn.setText("📹 摄像头")
+                self._camera_btn.setObjectName("")
+        else:
+            self._camera_btn.setText("📹 摄像头")
+            self._camera_btn.setObjectName("")
+            self._video_thread.stop_capture()
+            self._video_labels[0][0].clear()
+            self._video_labels[0][0].setText("📷 已关闭")
+
+    def _on_toggle_mic(self):
+        self._mic_on = not self._mic_on
+        if self._mic_on:
+            self._mic_btn.setText("🎙 麦克风")
+            self._mic_btn.setObjectName("")
+        else:
+            self._mic_btn.setText("🔇 静音")
+            self._mic_btn.setObjectName("mic_off")
+
+    def _on_toggle_screen_share(self):
+        self._screen_share_on = not self._screen_share_on
+        if self._screen_share_on:
+            self._share_btn.setText("🖥 停止")
+            self._share_btn.setObjectName("share_on")
+        else:
+            self._share_btn.setText("🖥 共享")
+            self._share_btn.setObjectName("")
+
+    def _on_toggle_online(self):
+        if not HAS_VIDEO_CLIENT:
+            QMessageBox.information(self, "提示", "线上会议功能需要 video_client 模块")
+            return
+        self._is_online = not self._is_online
+        if self._is_online:
+            self._online_btn.setText("🔴 断开")
+            self._online_btn.setObjectName("online_on")
+            self._start_online()
+        else:
+            self._online_btn.setText("🟢 线上会议")
+            self._online_btn.setObjectName("")
+            self._stop_online()
+
+    def _start_online(self):
+        if self._meeting_id and VideoClientWrapper:
+            try:
+                self._video_client = VideoClientWrapper(self._meeting_id)
+                self._video_client.start()
+                self._video_labels[1][0].setText("🟢 在线")
+            except Exception as e:
+                QMessageBox.warning(self, "警告", f"无法连接视频服务器: {e}")
+                self._is_online = False
+                self._online_btn.setText("🟢 线上会议")
+                self._online_btn.setObjectName("")
+
+    def _stop_online(self):
+        if self._video_client:
+            self._video_client.stop()
+            self._video_client = None
+
+    def _update_video_frame(self, frame):
+        if self._camera_on and self._video_labels:
+            pixmap = QPixmap.fromImage(frame)
+            self._video_labels[0][0].setPixmap(pixmap.scaled(120, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def _tick_timer(self):
         if self._timer_seconds <= 0:
@@ -461,4 +662,5 @@ class MeetingRoomView(QWidget):
 
     def closeEvent(self, event):
         self._timer.stop()
+        self._cleanup_video()
         super().closeEvent(event)
