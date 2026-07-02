@@ -1,0 +1,11 @@
+# 生产环境 — 最小日志 + 不自动建表
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+logging:
+  level:
+    com.standupsync: WARN
+    org.springframework: WARN

@@ -1,9 +1,21 @@
 package com.standupsync.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
 public class RegisterRequest {
 
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度需在3-50之间")
+    @Pattern(regexp = ".*[a-zA-Z].*", message = "用户名需包含字母")
     private String username;
+
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 4, max = 100, message = "密码长度需在4-100之间")
     private String password;
+
+    @Size(max = 50, message = "昵称最长50字符")
     private String displayName;
 
     public RegisterRequest() {

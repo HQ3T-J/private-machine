@@ -3,6 +3,7 @@ package com.standupsync.controller;
 import com.standupsync.dto.ApiResponse;
 import com.standupsync.dto.AuthResponse;
 import com.standupsync.dto.LoginDTO;
+import com.standupsync.dto.LoginRequest;
 import com.standupsync.dto.RegisterRequest;
 import com.standupsync.model.TeamMember;
 import com.standupsync.model.User;
@@ -10,6 +11,7 @@ import com.standupsync.repository.TeamMemberRepository;
 import com.standupsync.repository.UserRepository;
 import com.standupsync.security.JwtUtil;
 
+import jakarta.validation.Valid;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -35,7 +37,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ApiResponse<AuthResponse> register(@RequestBody RegisterRequest request) {
+    public ApiResponse<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         if (userRepository.findByUsername(request.getUsername()).isPresent())
             return ApiResponse.error(400, "账号已存在");
 

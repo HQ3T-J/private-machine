@@ -1,0 +1,11 @@
+# 开发环境 — 详细日志 + 自动建表
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  level:
+    com.standupsync: DEBUG
+    org.springframework.security: DEBUG
