@@ -319,3 +319,52 @@ class Toast(QWidget):
                       parent=parent)
         toast.show()
         return toast
+
+
+# ============================================================================
+# LoadingOverlay — 统一加载遮罩组件
+# ============================================================================
+
+class LoadingOverlay(QWidget):
+    """半透明加载遮罩，覆盖在父组件上显示加载状态。
+
+    用法:
+        overlay = LoadingOverlay(parent_widget, "正在加载...")
+        overlay.show()
+        # ... 异步操作完成后 ...
+        overlay.hide()
+    """
+
+    def __init__(self, parent=None, text="加载中..."):
+        super().__init__(parent)
+        self.setObjectName("LoadingOverlay")
+        self.setStyleSheet("""
+            #LoadingOverlay {
+                background: rgba(0, 0, 0, 0.55);
+                border-radius: 8px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(12)
+
+        # 旋转指示器（用文字模拟）
+        spinner = QLabel("\u23F3")
+        spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        spinner.setStyleSheet("font-size: 32px; background: transparent;")
+        layout.addWidget(spinner)
+
+        text_label = QLabel(text)
+        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        text_label.setStyleSheet("font-size: 14px; color: #FFFFFF; background: transparent;")
+        layout.addWidget(text_label)
+
+    def show(self):
+        if self.parent():
+            self.setGeometry(self.parent().rect())
+        super().show()
+        self.raise_()
+
+    def hide(self):
+        super().hide()

@@ -2,7 +2,10 @@
 import requests
 import os
 import json
+import logging
 from typing import Optional
+
+logger = logging.getLogger("StandupSync.APIClient")
 
 # 可配置：环境变量 > 默认值
 BASE_URL = os.environ.get("STANDUPSYNC_API", "http://localhost:8080")
@@ -118,8 +121,10 @@ class APIClient:
                 return fallback
         except requests.ConnectionError:
             self._online = False
+            logger.debug("Connection refused for %s %s", "GET", path)
             return fallback
-        except Exception:
+        except Exception as e:
+            logger.warning("[APIClient._get] %s: %s", path, e)
             return fallback
         return fallback
 
@@ -132,9 +137,10 @@ class APIClient:
             return r.json()
         except requests.ConnectionError:
             self._online = False
+            logger.debug("Connection refused for POST %s", path)
             return fallback
         except Exception as e:
-            print(f"[APIClient._post] Error: {e}")
+            logger.warning("[APIClient._post] %s: %s", path, e)
             return fallback
 
     def _parse_error(self, resp) -> str:

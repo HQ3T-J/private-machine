@@ -2,9 +2,9 @@ spring:
   application:
     name: standupsync-backend
   datasource:
-    url: jdbc:mysql://localhost:3306/standupsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: root
-    password: root
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/standupsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -19,22 +19,20 @@ spring:
       write-dates-as-timestamps: false
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 jwt:
-  secret: standupsync-jwt-secret-key-2026-very-long-secure
+  secret: ${JWT_SECRET:standupsync-jwt-secret-key-2026-very-long-secure}
   expiration: 86400000
 
-# ═══ AI 服务配置（服务端统一管理，用户无需配置） ═══
 ai:
-  # 提供商: openai / doubao / tongyi / none（使用规则引擎降级）
   provider: ${AI_PROVIDER:openai}
   model: ${AI_MODEL:deepseek-chat}
-  api-key: ${AI_API_KEY:sk-566bcf89e49a41709bf2953c895ef6a7}
+  api-key: ${AI_API_KEY:}
   base-url: ${AI_BASE_URL:https://api.deepseek.com}
   temperature: 0.7
   max-tokens: 4096
 
 logging:
   level:
-    com.standupsync: DEBUG
+    com.standupsync: ${LOG_LEVEL:INFO}
