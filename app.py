@@ -240,6 +240,7 @@ class Sidebar(QFrame):
             ("\u25A3", "看板", PAGE_DASHBOARD),
             ("\u263A", "团队", PAGE_TEAM),
             ("\u25CF", "通知", PAGE_NOTIFICATION),
+            ("\u2194", "转交", PAGE_TRANSFER),
             ("\u2699", "设置", PAGE_SETTINGS),
         ]
         for icon, label, idx in nav_items:
@@ -445,6 +446,12 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(settings)
         self._pages[PAGE_SETTINGS] = settings
 
+        # 5: 站会进行中
+        meeting_room = MeetingRoomView(api_client=self._api_client)
+        meeting_room.navigate_back.connect(self._on_meeting_back)
+        self._stack.addWidget(meeting_room)
+        self._pages[PAGE_MEETING_ROOM] = meeting_room
+
         # 6: 通知中心
         notification = NotificationView(api_client=self._api_client)
         notification.unread_count_changed.connect(self._on_unread_count_changed)
@@ -455,12 +462,6 @@ class MainWindow(QMainWindow):
         transfer = TransferView(api_client=self._api_client)
         self._stack.addWidget(transfer)
         self._pages[PAGE_TRANSFER] = transfer
-
-        # 5: 站会进行中
-        meeting_room = MeetingRoomView(api_client=self._api_client)
-        meeting_room.navigate_back.connect(self._on_meeting_back)
-        self._stack.addWidget(meeting_room)
-        self._pages[PAGE_MEETING_ROOM] = meeting_room
 
         # 首页 → 站会室 导航
         home.navigate_to_meeting.connect(self._on_enter_meeting_room)
