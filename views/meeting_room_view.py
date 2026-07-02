@@ -67,7 +67,7 @@ class VideoPanel(QFrame):
 
             nl = QLabel(name[:8])
             nl.setAlignment(Qt.AlignCenter)
-            nl.setStyleSheet("font-size: 10px; color: #C0C0D0;")
+            nl.setStyleSheet("font-size: 11px; color: #C0C0D0;")
             sl.addWidget(nl)
 
             self._slots_layout.addWidget(slot)
@@ -190,7 +190,7 @@ class MeetingRoomView(QWidget):
 
         # ═══ 底部提示 ═══
         hint = QLabel("💡 输入自由文本描述你的工作进展，AI 会自动解析为结构化发言")
-        hint.setStyleSheet("font-size: 11px; color: #6E6E8E; padding: 4px 0;")
+        hint.setStyleSheet("font-size: 12px; color: #6E6E8E; padding: 4px 0;")
         hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(hint)
 

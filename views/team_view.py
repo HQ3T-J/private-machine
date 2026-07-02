@@ -279,7 +279,7 @@ class TeamView(QWidget):
             if self._current_role in ("TECH_LEAD", "SCRUM_MASTER"):
                 uid = m.get("user_id"); r = row
                 btn = QPushButton("移除")
-                btn.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;}")
+                btn.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:4px 8px;font-size:12px;background:transparent;}")
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.clicked.connect(lambda checked, uid=uid, row=r: self._remove_member(uid, row))
                 container = QWidget()
@@ -318,12 +318,12 @@ class TeamView(QWidget):
             self._app_table.setItem(row, 1, QTableWidgetItem(t))
             aid = a.get("id")
             approve = QPushButton("✓ 批准")
-            approve.setStyleSheet("QPushButton{color:#238636;border:1px solid #238636;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;} QPushButton:hover{background:#238636;color:#FFF;}")
+            approve.setStyleSheet("QPushButton{color:#238636;border:1px solid #238636;border-radius:3px;padding:4px 8px;font-size:12px;background:transparent;} QPushButton:hover{background:#238636;color:#FFF;}")
             approve.setCursor(Qt.PointingHandCursor)
             approve.clicked.connect(lambda checked, aid=aid: self._on_approve(aid))
             self._app_table.setCellWidget(row, 2, approve)
             reject = QPushButton("✕ 拒绝")
-            reject.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:2px 6px;font-size:11px;background:transparent;} QPushButton:hover{background:#E74C3C;color:#FFF;}")
+            reject.setStyleSheet("QPushButton{color:#E74C3C;border:1px solid #E74C3C;border-radius:3px;padding:4px 8px;font-size:12px;background:transparent;} QPushButton:hover{background:#E74C3C;color:#FFF;}")
             reject.setCursor(Qt.PointingHandCursor)
             reject.clicked.connect(lambda checked, aid=aid: self._on_reject(aid))
             self._app_table.setCellWidget(row, 3, reject)

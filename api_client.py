@@ -290,6 +290,13 @@ class APIClient:
         data = self._get(path)
         return data if isinstance(data, list) else []
 
+    def get_dashboard_blocker(self, team_id, blocker_type: str = None) -> list:
+        """阻碍分布 — 使用独立端点 blocker-distribution"""
+        path = f"/api/dashboard/blocker-distribution?teamId={team_id}"
+        if blocker_type: path += f"&blockerType={blocker_type}"
+        data = self._get(path)
+        return data if isinstance(data, list) else []
+
     def get_member_ranking(self, team_id, sort_by: str = "completionRate") -> list:
         data = self._get(f"/api/dashboard/member-ranking?teamId={team_id}&sortBy={sort_by}")
         return data if isinstance(data, list) else []

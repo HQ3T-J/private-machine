@@ -5,7 +5,7 @@
 
 from PySide6.QtWidgets import (
     QFrame, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGraphicsOpacityEffect,
-    QApplication,
+    QApplication, QSizePolicy,
 )
 from PySide6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve, Property, QPoint,
@@ -54,7 +54,10 @@ class StatCard(QFrame):
 
         # 标题
         self._title_label = QLabel(title)
-        self._title_label.setStyleSheet("font-size: 12px;")
+        self._title_label.setStyleSheet(
+            'font-size: 12px; font-family: "Microsoft YaHei", "Segoe UI", sans-serif;'
+        )
+        self._title_label.setMinimumHeight(18)
         layout.addWidget(self._title_label)
 
         # 数值行（数值 + 趋势）
@@ -62,20 +65,30 @@ class StatCard(QFrame):
         value_row.setSpacing(6)
 
         self._value_label = QLabel(value)
-        self._value_label.setStyleSheet("font-size: 28px; font-weight: bold;")
+        self._value_label.setStyleSheet(
+            'font-size: 28px; font-weight: bold; '
+            'font-family: "Microsoft YaHei", "Segoe UI", sans-serif;'
+        )
+        self._value_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._value_label.setMinimumWidth(70)
+        self._value_label.setMinimumHeight(42)
         value_row.addWidget(self._value_label)
+        value_row.addStretch()
 
         self._trend_label = QLabel(trend)
         self._trend_label.setStyleSheet(
-            f"color: {trend_color}; font-size: 12px; font-weight: bold;"
+            f"color: {trend_color}; font-size: 12px; font-weight: bold; "
+            'font-family: "Microsoft YaHei", "Segoe UI", sans-serif;'
         )
         value_row.addWidget(self._trend_label)
-        value_row.addStretch()
         layout.addLayout(value_row)
 
         # 副标题（dashboard 用法）
         self._subtitle_label = QLabel(subtitle)
-        self._subtitle_label.setStyleSheet("font-size: 11px;")
+        self._subtitle_label.setStyleSheet(
+            'font-size: 11px; font-family: "Microsoft YaHei", "Segoe UI", sans-serif;'
+        )
+        self._subtitle_label.setMinimumHeight(16)
         layout.addWidget(self._subtitle_label)
         layout.addStretch()
 

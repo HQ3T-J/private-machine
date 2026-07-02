@@ -32,7 +32,7 @@ QMainWindow::separator { background-color: #2A2A4E; width: 1px; height: 1px; }
 QMainWindow, QWidget, QFrame, QLabel, QDialog, QGroupBox, QStackedWidget, QTableWidget, QSplitter, QProgressBar { background-color: #1A1A2E; color: #FFFFFF; font-family: "Microsoft YaHei","Segoe UI",sans-serif; font-size: 13px; }
 QFrame { background-color: #1A1A2E; }
 QLabel { background-color: transparent; color: #FFFFFF; border: none; }
-QPushButton { background-color: #4A9ED9; color: #FFFFFF; border: none; border-radius: 6px; padding: 8px 20px; font-weight: bold; min-height: 32px; }
+QPushButton { background-color: #4A9ED9; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 16px; font-weight: bold; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; font-size: 13px; min-height: 32px; }
 QPushButton:hover { background-color: #5DB3E8; }
 QPushButton:pressed { background-color: #3A8EC9; }
 QPushButton:disabled { background-color: #2A2A4E; color: #8E8E9E; }
@@ -43,7 +43,7 @@ QLineEdit::placeholder { color: #8E8E9E; }
 QTextEdit, QPlainTextEdit { background-color: #16213E; color: #FFFFFF; border: 1px solid #2A2A4E; border-radius: 6px; padding: 8px; selection-background-color: #4A9ED9; }
 QTextEdit:focus, QPlainTextEdit:focus { border-color: #4A9ED9; }
 QTableView { background-color: #16213E; color: #FFFFFF; border: 1px solid #2A2A4E; border-radius: 6px; gridline-color: #2A2A4E; selection-background-color: #0F3460; alternate-background-color: #1A1A2E; }
-QTableView::item { padding: 8px 12px; min-height: 24px; }
+QTableView::item { padding: 8px 12px; min-height: 28px; }
 QTableView::item:hover { background-color: #0F3460; }
 QHeaderView { background-color: #16213E; border: none; }
 QHeaderView::section { background-color: #16213E; color: #8E8E9E; padding: 8px 12px; border: none; border-bottom: 2px solid #2A2A4E; font-weight: bold; min-height: 24px; }
@@ -98,6 +98,9 @@ QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #0F3460; color: #4A9ED9; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #1E2D50; }
 
+/* ── 表格内嵌按钮 — 与全局大按钮分离，紧凑尺寸 ── */
+QTableWidget QPushButton { min-height: 24px; padding: 2px 8px; font-size: 11px; font-weight: normal; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; }
+
 /* ── Sidebar ── */
 QFrame#Sidebar { background-color: #1A1A2E; border-right: 1px solid #2A2A4A; }
 QFrame#Sidebar QPushButton { background: transparent; text-align: left; }
@@ -144,7 +147,7 @@ QMainWindow::separator { background-color: #E5E5E5; width: 1px; height: 1px; }
 QMainWindow, QWidget, QFrame, QLabel, QDialog, QGroupBox, QStackedWidget, QTableWidget, QSplitter, QProgressBar { background-color: #F4F6F8; color: #262626; font-family: "Microsoft YaHei","Segoe UI",sans-serif; font-size: 13px; }
 QFrame { background-color: #F4F6F8; }
 QLabel { background-color: transparent; color: #262626; border: none; }
-QPushButton { background-color: #1890FF; color: #FFFFFF; border: none; border-radius: 6px; padding: 8px 20px; font-weight: bold; min-height: 32px; }
+QPushButton { background-color: #1890FF; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 16px; font-weight: bold; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; font-size: 13px; min-height: 32px; }
 QPushButton:hover { background-color: #40A9FF; }
 QPushButton:pressed { background-color: #096DD9; }
 QPushButton:disabled { background-color: #D9D9D9; color: #8C8C8C; }
@@ -155,7 +158,7 @@ QLineEdit::placeholder { color: #8C8C8C; }
 QTextEdit, QPlainTextEdit { background-color: #FFFFFF; color: #262626; border: 1px solid #E5E5E5; border-radius: 6px; padding: 8px; selection-background-color: #1890FF; }
 QTextEdit:focus, QPlainTextEdit:focus { border-color: #1890FF; }
 QTableView { background-color: #FFFFFF; color: #262626; border: 1px solid #E5E5E5; border-radius: 6px; gridline-color: #F0F0F0; selection-background-color: #E6F7FF; selection-color: #262626; alternate-background-color: #FAFBFC; }
-QTableView::item { padding: 8px 12px; min-height: 24px; }
+QTableView::item { padding: 8px 12px; min-height: 28px; }
 QTableView::item:hover { background-color: #E6F7FF; }
 QHeaderView { background-color: #FAFBFC; border: none; }
 QHeaderView::section { background-color: #FAFBFC; color: #8C8C8C; padding: 8px 12px; border: none; border-bottom: 1px solid #E5E5E5; font-weight: bold; min-height: 24px; }
@@ -209,6 +212,9 @@ QListWidget, QTreeWidget { background-color: #FFFFFF; color: #262626; border: 1p
 QListWidget::item, QTreeWidget::item { padding: 6px 12px; }
 QListWidget::item:selected, QTreeWidget::item:selected { background-color: #E6F7FF; color: #1890FF; }
 QListWidget::item:hover, QTreeWidget::item:hover { background-color: #E6F7FF; }
+
+/* ── 表格内嵌按钮 — 与全局大按钮分离，紧凑尺寸 ── */
+QTableWidget QPushButton { min-height: 24px; padding: 2px 8px; font-size: 11px; font-weight: normal; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; }
 
 /* ── Sidebar ── */
 QFrame#Sidebar { background-color: #FFFFFF; border-right: 1px solid #E5E5E5; }

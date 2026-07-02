@@ -316,13 +316,14 @@ class HomeView(QWidget):
 
             btn_row = QHBoxLayout()
             btn_row.setSpacing(4)
-            btn_row.setContentsMargins(0, 0, 0, 0)
+            btn_row.setContentsMargins(2, 2, 2, 2)
 
             if m.get("status") in ("ACTIVE", "CREATED"):
                 enter_sm = QPushButton("进入")
+                enter_sm.setFixedHeight(26)
                 enter_sm.setStyleSheet("""
                     QPushButton { background: #4A90D9; color: #FFF; border: none;
-                        border-radius: 3px; padding: 3px 10px; font-size: 11px; }
+                        border-radius: 3px; padding: 4px 12px; font-size: 12px; }
                     QPushButton:hover { background: #5BA0E9; }
                 """)
                 enter_sm.setCursor(Qt.PointingHandCursor)
@@ -332,10 +333,11 @@ class HomeView(QWidget):
                 btn_row.addWidget(enter_sm)
 
             view_btn = QPushButton("查看")
+            view_btn.setFixedHeight(26)
             view_btn.setStyleSheet("""
                 QPushButton { background: transparent; color: #4A90D9;
                     border: 1px solid #4A90D9; border-radius: 3px;
-                    padding: 3px 10px; font-size: 11px; }
+                    padding: 4px 12px; font-size: 12px; }
                 QPushButton:hover { background: rgba(74,144,217,0.2); }
             """)
             view_btn.setCursor(Qt.PointingHandCursor)
@@ -344,9 +346,12 @@ class HomeView(QWidget):
             view_btn.clicked.connect(lambda checked=False, mid=mid, md=md: self._on_view_meeting(mid, md))
             btn_row.addWidget(view_btn)
 
+            btn_row.addStretch()
             wrapper = QWidget()
+            wrapper.setStyleSheet("background: transparent;")
             wrapper.setLayout(btn_row)
             self.table.setCellWidget(row_idx, 5, wrapper)
+            self.table.setRowHeight(row_idx, 34)
 
     def _on_create_meeting(self):
         if not self._current_team_id:

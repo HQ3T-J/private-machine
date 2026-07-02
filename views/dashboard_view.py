@@ -11,14 +11,14 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QProgressBar, QSizePolicy, QPushButton, QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal, QPointF, QTimer
+from PySide6.QtCore import Qt, Signal, QPointF, QTimer, QThread, QObject
 from widgets import EmptyState
 from PySide6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPolygonF
 from widgets import StatCard
 
 # ── 辅助样式 ──
 def _combo_style(): return "QComboBox{border-radius:4px;padding:4px 8px;font-size:12px;}"
-def _table_style(): return "QTableWidget{border:none;font-size:12px;} QTableWidget::item{padding:4px 6px;} QHeaderView::section{padding:6px;border:none;font-weight:bold;font-size:11px;}"
+def _table_style(): return "QTableWidget{border:none;font-size:13px;} QTableWidget::item{padding:4px 6px;} QHeaderView::section{padding:6px;border:none;font-weight:bold;font-size:12px;}"
 
 _BLOCKER_MAP = {"技术":"tech","资源":"resource","沟通":"communication","其他":"other"}
 
@@ -108,6 +108,45 @@ class FilterTag(QFrame):
         self.setStyleSheet("#FilterTag{border-radius:4px;}")
 
 # ═══════════════════════════════════════════════════════════
+#  DashboardWorker — 后台加载看板数据，避免主线程冻结
+# ═══════════════════════════════════════════════════════════
+
+class DashboardWorker(QObject):
+    """在 QThread 中加载所有看板数据，通过信号返回结果。"""
+    data_loaded = Signal(dict)  # payload: {summary, att_trend, comp_trend, blocker, ranking}
+
+    def __init__(self, api_client, team_id, filters):
+        super().__init__()
+        self.api_client = api_client
+        self.team_id = team_id
+        self.filters = filters
+
+    def run(self):
+        c = self.api_client
+        tid = self.team_id
+        f = self.filters
+        sprint = f.get("sprint")
+        sprint_str = str(sprint) if sprint else None
+        uid = f.get("userId")
+        bt = _BLOCKER_MAP.get(f.get("blocker_type")) if f.get("blocker_type") else None
+
+        payload = {}
+        # Summary
+        payload["summary"] = c.get_dashboard_summary(
+            tid, sprint_str, f.get("dateFrom"), f.get("dateTo")) or {}
+        # Trends
+        payload["att_trend"] = c.get_dashboard_trend(tid, "attendance", uid)
+        payload["comp_trend"] = c.get_dashboard_trend(tid, "completion", uid)
+        # Blocker distribution (独立端点)
+        payload["blocker"] = c.get_dashboard_blocker(tid, bt)
+        # Ranking
+        payload["ranking"] = c.get_member_ranking(
+            tid, f.get("sortBy", "completionRate"))
+
+        self.data_loaded.emit(payload)
+
+
+# ═══════════════════════════════════════════════════════════
 #  DashboardView
 # ═══════════════════════════════════════════════════════════
 
@@ -180,7 +219,7 @@ class DashboardView(QWidget):
         sr = QHBoxLayout(); sr.setSpacing(16); self._cards = {}
         for k, t, c in [("meetings","站会次数","#4A9ED9"),("attendance","平均出勤率","#52C41A"),
                          ("completion","待办完成率","#F5A623"),("blockers","活跃阻碍","#E74C3C")]:
-            card = StatCard(t, "—", accent_color=c, fixed_size=(200,100)); self._cards[k] = card; sr.addWidget(card)
+            card = StatCard(t, "—", accent_color=c, fixed_size=(200, 120)); self._cards[k] = card; sr.addWidget(card)
         sr.addStretch(); layout.addLayout(sr)
 
         # ── 趋势图 ──
@@ -225,9 +264,70 @@ class DashboardView(QWidget):
                 self._team_id = teams[0].get("id")
                 self._load_sprints()
                 self._load_members()
-                self._load_all_data()
+                self._start_loading()
                 return
         self._clear_all()
+
+    def _start_loading(self):
+        """启动后台线程加载数据，UI 不冻结。"""
+        if not self._team_id or not self.api_client:
+            return
+        # 显示 loading 状态
+        for c in self._cards.values():
+            c.update_value("...")
+        self._trend_att.set_data([{"date": "...", "rate": 0}, {"date": "...", "rate": 0}])
+        self._trend_comp.set_data([{"date": "...", "rate": 0}, {"date": "...", "rate": 0}])
+        self._blocker.set_data([])
+        self._rank_table.setRowCount(0)
+
+        self._worker_thread = QThread()
+        self._worker = DashboardWorker(
+            self.api_client, self._team_id, self._filters.copy())
+        self._worker.moveToThread(self._worker_thread)
+        self._worker_thread.started.connect(self._worker.run)
+        self._worker.data_loaded.connect(self._on_data_loaded)
+        self._worker.data_loaded.connect(self._worker_thread.quit)
+        self._worker.data_loaded.connect(self._worker.deleteLater)
+        self._worker_thread.finished.connect(self._worker_thread.deleteLater)
+        self._worker_thread.start()
+
+    def _on_data_loaded(self, payload):
+        """后台数据加载完成，刷新 UI。"""
+        s = payload.get("summary", {})
+
+        self._cards["meetings"].update_value(str(s.get("totalMeetings", 0)))
+        ar = s.get("avgAttendanceRate", 0)
+        self._cards["attendance"].update_value(
+            f"{int(ar * 100)}%" if isinstance(ar, float) and ar <= 1 else f"{ar}%")
+        cr = s.get("completionRate", 0)
+        self._cards["completion"].update_value(
+            f"{int(cr * 100)}%" if isinstance(cr, float) and cr <= 1 else f"{cr}%")
+        self._cards["blockers"].update_value(str(s.get("activeBlockers", 0)))
+
+        self._trend_att.set_data(payload.get("att_trend", []))
+        self._trend_comp.set_data(payload.get("comp_trend", []))
+        self._blocker.set_data(payload.get("blocker", []))
+
+        ranking = payload.get("ranking", [])
+        self._rank_table.setRowCount(len(ranking))
+        for i, m in enumerate(ranking):
+            ri = QTableWidgetItem(str(i + 1)); ri.setTextAlignment(Qt.AlignCenter)
+            self._rank_table.setItem(i, 0, ri)
+            self._rank_table.setItem(i, 1, QTableWidgetItem(m.get("name", "?")))
+            ti = QTableWidgetItem(str(m.get("total", 0))); ti.setTextAlignment(Qt.AlignCenter)
+            self._rank_table.setItem(i, 2, ti)
+            rt = m.get("rate", 0)
+            if isinstance(rt, float) and rt <= 1:
+                rt *= 100
+            ri2 = QTableWidgetItem(f"{int(rt)}%"); ri2.setTextAlignment(Qt.AlignCenter)
+            self._rank_table.setItem(i, 3, ri2)
+            pb = QProgressBar(); pb.setRange(0, 100); pb.setValue(int(rt)); pb.setTextVisible(False)
+            pb.setStyleSheet(
+                "QProgressBar{border:none;border-radius:4px;min-height:8px;max-height:12px;}"
+                "QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}"
+            )
+            self._rank_table.setCellWidget(i, 4, pb)
+            self._rank_table.setRowHeight(i, 28)
 
     def _load_members(self):
         if not self._team_id: return
@@ -271,9 +371,9 @@ class DashboardView(QWidget):
         self._trend_att.set_data(att_data)
         self._trend_comp.set_data(comp_data)
 
-        # Blocker — 用后端 trend blocker 端点
+        # Blocker — 用独立端点 blocker-distribution
         bt = _BLOCKER_MAP.get(f.get("blocker_type")) if f.get("blocker_type") else None
-        blocker_data = c.get_dashboard_trend(self._team_id, "blocker")
+        blocker_data = c.get_dashboard_blocker(self._team_id, bt)
         self._blocker.set_data(blocker_data)
 
         # Ranking — 用后端 sortBy
@@ -290,8 +390,12 @@ class DashboardView(QWidget):
             ri2 = QTableWidgetItem(f"{int(rt)}%"); ri2.setTextAlignment(Qt.AlignCenter)
             self._rank_table.setItem(i,3,ri2)
             pb = QProgressBar(); pb.setRange(0,100); pb.setValue(int(rt)); pb.setTextVisible(False)
-            pb.setStyleSheet("QProgressBar{border:none;border-radius:4px;height:8px;} QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}")
+            pb.setStyleSheet(
+                "QProgressBar{border:none;border-radius:4px;min-height:8px;max-height:12px;}"
+                "QProgressBar::chunk{border-radius:4px;background:#4A9ED9;}"
+            )
             self._rank_table.setCellWidget(i,4,pb)
+            self._rank_table.setRowHeight(i, 28)
 
     def _clear_all(self):
         for c in self._cards.values(): c.update_value("—")
@@ -332,7 +436,7 @@ class DashboardView(QWidget):
             self._filters["dateTo"] = today.isoformat()
         else:
             self._filters["dateFrom"] = self._filters["dateTo"] = None
-        self._load_all_data()
+        self._start_loading()
         self._sync_tags()
 
     def _on_reset_filters(self):
